@@ -1,0 +1,880 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Captcher Recorder</title>
+  <!-- Stamps data-sc-theme on <html> synchronously, before the first paint.
+       Must stay ahead of the stylesheet below and of panel.js. -->
+  <script src="../theme.js"></script>
+  <link rel="stylesheet" href="../fonts/fonts.css">
+  <style>
+    /* ========================================================================
+       Captcher — the recorder side panel.  Brand Guide v1, softened (UI v2),
+       and no purple, ever.
+
+       A hand-rolled subset of the platform stylesheet
+       (captcher_app/static/shadowcapture.css), not a copy of it: an extension
+       cannot link the server's CSS, and the side panel needs about a fifth of
+       the vocabulary. Token names and values are kept identical so a change
+       over there is a search-and-paste over here. Do not hand-pick a hex that
+       is not in the palette below.
+
+       The panel is 320-400px wide and docked beside a live customer product:
+
+         · light is home, like the app; dark is the derived palette
+         · Indigo leads (buttons, links, focus); Coral means recording;
+           Sky is progress and Show me; Mint is success
+         · soft geometry: 12px controls, 18px cards, pills for chips; the
+           logo mark is the only square
+         · one soft shadow, and only for surfaces that float (the menu)
+         · numbers and machine strings are mono; labels are small caps in DM Sans
+         · sentence case in prose and buttons
+
+       Appearance is resolved by ../theme.js, which stamps data-sc-theme on
+       <html> before the first paint: :root holds light, [data-sc-theme="dark"]
+       the derived dark palette — the same arrangement as the app.
+       ==================================================================== */
+    :root {
+      /* Brand palette (theme-independent). */
+      --indigo: #3B49C6;  --indigo-press: #2F3BA8;
+      --sky: #29B6FF;     --sky-deep: #0A6FA8;
+      --mint: #3ECFA2;    --mint-deep: #0B7A5A;
+      --coral: #FF6A5C;   --coral-deep: #B83227;
+      --ink: #14151A;
+
+      /* Semantic, light. */
+      --lead:       var(--indigo);
+      --lead-hover: var(--ink);
+      --lead-deep:  var(--indigo-press);
+      --on-lead:    #FFFFFF;
+
+      --background: #F2F3F7;      /* Mist  */
+      --surface:    #FFFFFF;
+      --surface-2:  #F2F3F7;
+      --text:       #14151A;      /* Ink   */
+      --text-soft:  #4B4F5A;      /* Slate */
+      --muted:      #6B6F7B;      /* Steel, 5.0:1 on white */
+      --text-label: #6B6F7B;
+      --text-dim:   #6B6F7B;      /* placeholders */
+      --text-off:   #9A9EAB;      /* disabled — exempt from the contrast floor */
+      --border:        #E6E7EC;   /* Line */
+      --border-strong: #C9CBD3;
+      --control-border: #8C90A0;  /* form-control boundary, 3:1 on white */
+
+      /* The ten-name contract, same names the app and the player use. */
+      --primary: var(--lead);
+      --primary-hover: var(--lead-hover);
+      --accent: var(--sky-deep);          /* progress, Show me — never purple */
+      --accent-fill: var(--sky);
+      --rec: var(--coral);                /* a live recording is a coral dot */
+      --success: var(--mint-deep);
+      --error: var(--coral-deep);
+      --link: var(--indigo);
+      --on-primary: var(--on-lead);
+      --disabled-bg: var(--surface-2);
+      --disabled-text: var(--text-off);
+
+      --tint-accent: #EEF0FC;
+      --tint-success: #ECFAF5;
+      --tint-error: #FFF1EF;
+      --tint-hint: #EAF7FF;
+      --shadow-pop: 0 10px 30px rgba(20, 21, 26, .12);
+
+      /* Focus: the field border plus a soft 4px halo, as in the app. */
+      --focus-color: var(--indigo);
+      --focus-ring: 0 0 0 4px rgba(59, 73, 198, .22);
+      --focus-width: 2px;
+      --focus-offset: 2px;
+
+      --font-display: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --weight-regular: 400;
+      --weight-medium: 500;
+      --weight-semibold: 600;
+      --weight-heading: 600;
+
+      /* The platform type scale, plus --type-panel: 320px is a column rather
+         than a page, so prose sits one step under the app's 15px body. */
+      --type-h3: 16px;
+      --type-panel: 13px;
+      --type-label: 11px;
+      --track-heading: -.02em;
+      --track-body: 0;
+      --track-label: .06em;
+
+      /* 4px lattice. Side panel gutters: 14 outer, 12 stack. */
+      --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px;
+      --gutter: 14px;
+      --stack: 12px;
+
+      /* UI v2 geometry. Frames around captured screens stay square. */
+      --radius-sm: 10px;
+      --radius-control: 12px;
+      --radius-container: 18px;
+      --radius-pill: 999px;
+      --line: 1px;
+      --hit: 36px;
+
+      --ease-settle: cubic-bezier(.2, 0, .2, 1);
+      --ease-hold: linear;
+      --dur-control: 120ms;
+
+      color-scheme: light;
+    }
+
+    /* ------------------------------------------------------------- dark -- */
+    /* The app's derived dark palette ([data-sc-theme="dark"] in
+       shadowcapture.css), from the Brand Guide's dark lockup ground #0F1117. */
+    [data-sc-theme="dark"] {
+      --lead:       var(--indigo);
+      --lead-hover: #4F5DE0;
+      --lead-deep:  var(--indigo-press);
+      --on-lead:    #FFFFFF;
+
+      --background: #0F1117;
+      --surface:    #171A22;
+      --surface-2:  #1F2330;
+      --text:       #F4F5F8;
+      --text-soft:  #B9BCC7;
+      --muted:      #9296A6;
+      --text-label: #9296A6;
+      --text-dim:   #9296A6;
+      --text-off:   #6E7486;
+      --border:        #2A2E3A;
+      --border-strong: #3A3F4D;
+      --control-border: #6E7486;
+
+      --link: #9AA3FF;             /* indigo as text on dark (7.5:1) */
+      --accent: var(--sky);
+      --success: var(--mint);
+      --error: #FF8A7E;
+
+      --tint-accent: #1B1F38;
+      --tint-success: #13261F;
+      --tint-error: #2A1A1C;
+      --tint-hint: #132433;
+      --shadow-pop: 0 10px 30px rgba(0, 0, 0, .45);
+
+      --focus-color: #7C87F5;
+      --focus-ring: 0 0 0 4px rgba(124, 135, 245, .32);
+
+      color-scheme: dark;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      :root { --dur-control: 0ms; }
+    }
+
+    /* ------------------------------------------------------------- base -- */
+    *, *::before, *::after { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: var(--gutter);
+      background: var(--background);
+      color: var(--text-soft);
+      font-family: var(--font-sans);
+      font-size: var(--type-panel);
+      line-height: 1.55;
+      letter-spacing: var(--track-body);
+      -webkit-font-smoothing: antialiased;
+    }
+    body, button, input, select, textarea { font-family: var(--font-sans); }
+    button, input { font: inherit; color: inherit; }
+    p, h1, h2, ul { margin: 0; }
+    ul { padding: 0; }
+    strong, b { color: var(--text); font-weight: var(--weight-semibold); }
+    .hidden { display: none !important; }
+    /* `button { display: inline-flex }` below outranks the UA's [hidden] rule, which
+       left #connect-reset showing on an unconnected panel. The attribute wins. */
+    [hidden] { display: none !important; }
+    ::selection { background: var(--lead); color: var(--on-lead); }
+
+    /* The focus ring is identical on every control in the system. */
+    :focus-visible {
+      outline: var(--focus-width) solid var(--focus-color);
+      outline-offset: var(--focus-offset);
+    }
+
+    /* Mono caps read as machine output rather than shouting — the only place
+       caps are allowed. Written sentence case in source so it still reads
+       correctly if the transform is dropped. */
+    .label {
+      font-family: var(--font-sans);
+      font-size: var(--type-label);
+      font-weight: var(--weight-medium);
+      letter-spacing: var(--track-label);
+      text-transform: uppercase;
+      color: var(--text-label);
+    }
+    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .small { font-size: 12px; line-height: 1.5; }
+    .muted { color: var(--muted); }
+
+    /* ------------------------------------------------------------ brand -- */
+    /* The Captcher mark: a frame holding five stepping squares — Coral, Sky,
+       Indigo, Mint, Coral. Inline SVG in the markup; the frame follows the
+       text colour (currentColor) and the squares keep their colours. It is the
+       only square thing on this panel. */
+    header.brand { display: flex; align-items: center; gap: 10px; margin-bottom: var(--s4); }
+    .brand-mark { display: block; flex: none; width: 24px; height: 24px; color: var(--text); }
+    /* The wordmark: Outfit Black, tracked tight, like the logo lockup. */
+    .brand-word {
+      font-family: var(--font-display); font-weight: 900;
+      font-size: 18px; line-height: 1.05; letter-spacing: -.035em;
+      color: var(--text);
+    }
+    .brand-sub { margin-top: 2px; }
+
+    /* ---------------------------------------------------------- buttons -- */
+    /* Nothing scales and nothing lifts. Hover steps the fill lighter within
+       the same hue; press steps it back down. */
+    button {
+      display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
+      min-height: var(--hit);
+      padding: 7px var(--s3);
+      font-size: var(--type-panel);
+      font-weight: var(--weight-medium);
+      line-height: 1.25;
+      letter-spacing: -.01em;
+      white-space: nowrap;
+      cursor: pointer;
+      border: var(--line) solid transparent;
+      border-radius: var(--radius-control);
+      background: transparent;
+      color: var(--text);
+      transition: background var(--dur-control) var(--ease-settle),
+                  border-color var(--dur-control) var(--ease-settle),
+                  color var(--dur-control) var(--ease-settle);
+    }
+    #wt-start, #capture, #connect-action, #wt-finish, #send {
+      background: var(--primary); border-color: var(--primary); color: var(--on-primary);
+      font-weight: var(--weight-semibold);
+    }
+    #wt-start:hover:not(:disabled), #capture:hover:not(:disabled),
+    #connect-action:hover:not(:disabled), #wt-finish:hover:not(:disabled),
+    #send:hover:not(:disabled) {
+      background: var(--primary-hover); border-color: var(--primary-hover);
+    }
+    #wt-start:active:not(:disabled), #capture:active:not(:disabled),
+    #connect-action:active:not(:disabled), #wt-finish:active:not(:disabled),
+    #send:active:not(:disabled) {
+      background: var(--lead-deep); border-color: var(--lead-deep); color: var(--on-primary);
+    }
+    #wt-start, #capture, #connect-action, #connect-reset { width: 100%; }
+    #wt-start { margin: var(--s3) 0; }
+    #connect-reset { margin-bottom: var(--s2); }
+    /* Secondary: a hairline that takes the lead on hover. No fill. */
+    .wide-secondary, .row button, #download, #wt-discard, #connect-reset {
+      border-color: var(--border-strong); color: var(--text); background: var(--surface);
+      font-weight: var(--weight-medium);
+    }
+    .wide-secondary { width: 100%; }
+    .wide-secondary:hover:not(:disabled), .row button:hover:not(:disabled) {
+      border-color: var(--link); color: var(--link);
+    }
+    /* Disabled: muted text on a hairline, no fill. Exempt from the contrast
+       floor, and deliberately not a lighter version of the fill — a greyed
+       primary still reads as pressable. */
+    button:disabled {
+      background: var(--disabled-bg); border-color: var(--border);
+      color: var(--disabled-text); cursor: not-allowed;
+    }
+    button:disabled:hover {
+      background: var(--disabled-bg); border-color: var(--border); color: var(--disabled-text);
+    }
+    .row { display: flex; gap: var(--s2); margin-top: 10px; }
+    .row button { flex: 1; }
+
+    .icon-btn {
+      min-height: 0; padding: 5px; gap: 0;
+      border-radius: var(--radius-control);
+      border-color: transparent; color: var(--muted);
+    }
+    .icon-btn { border-radius: var(--radius-sm); }
+    .icon-btn:hover { color: var(--text); background: var(--surface-2); }
+    /* Two named affordances instead of one anonymous overflow dot: settings
+       and help are the only two things a person reaches for from the header,
+       so both get an icon and neither is hidden behind a guess. Grouped so the
+       pair sits against the panel edge and the menu still opens flush to it. */
+    .brand-actions { display: flex; align-items: center; gap: 2px; margin-left: auto; }
+    #menu-button[aria-expanded="true"] { color: var(--text); background: var(--surface-2); }
+    .mini {
+      min-height: 26px; padding: 3px 11px; border-radius: var(--radius-pill);
+      font-family: var(--font-sans); font-size: var(--type-label); letter-spacing: var(--track-label);
+      text-transform: uppercase; font-weight: var(--weight-medium);
+      border-color: var(--border); color: var(--muted);
+    }
+    .mini:hover { border-color: var(--border-strong); color: var(--text); }
+
+    /* -------------------------------------------- overflow menu (popover) -- */
+    /* A menu is separated by a strong hairline, not by a shadow: this system
+       has none, and the single modal shadow this panel used to spend here was
+       the last of them. Same construction as the app's .modal — --surface with
+       --border-strong around it — so it holds its edge even when it opens over
+       a card of the same value. */
+    #menu {
+      position: fixed; inset: auto var(--stack) auto auto; top: 44px;
+      margin: 0; padding: var(--s1); min-width: 208px;
+      background: var(--surface); color: var(--text);
+      border: var(--line) solid var(--border); border-radius: var(--radius-control);
+      box-shadow: var(--shadow-pop);   /* the one floating surface, so the one shadow */
+    }
+    #menu::backdrop { background: transparent; }
+    #menu [role="menuitem"], #menu [role="menuitemcheckbox"] {
+      display: block; width: 100%; min-height: 30px; text-align: left;
+      padding: 6px 9px; border-radius: var(--radius-sm);
+      background: transparent; border: 0; color: var(--text);
+      font-weight: var(--weight-regular); cursor: pointer;
+    }
+    #menu [role="menuitem"]:hover:not(:disabled),
+    #menu [role="menuitemcheckbox"]:hover:not(:disabled) { background: var(--surface-2); }
+    #menu button:disabled { color: var(--disabled-text); background: transparent; cursor: default; }
+    #menu .danger { color: var(--error); }
+    #menu [role="separator"] { height: 1px; background: var(--border); margin: var(--s1) var(--s1); }
+
+    /* --------------------------------- surfaces: exactly one is visible --- */
+    .surface { display: none; }   /* data-surface="boot" shows none: no first-paint flash */
+    [data-surface="main"] #surface-main,
+    [data-surface="single"] #surface-single,
+    [data-surface="settings"] #surface-settings,
+    [data-surface="window"] #surface-window { display: block; }
+    .surface-head { display: flex; align-items: center; gap: var(--s1); margin: 0 0 var(--s2); }
+    .surface-head h2 {
+      margin: 0; font-family: var(--font-display); font-size: var(--type-h3);
+      font-weight: var(--weight-heading);
+      line-height: 1.4; letter-spacing: var(--track-heading); color: var(--text);
+    }
+    /* panel.js moves focus to the heading when a surface opens, so screen
+       readers announce where they landed. That is a programmatic focus, not a
+       keyboard one — it gets no ring, or every back button would leave a box
+       drawn round the title. */
+    .surface-head h2:focus, .surface-head h2:focus-visible { outline: none; }
+
+    /* ----------------------------------------------------------- cards --- */
+    /* Depth is a surface step plus a hairline. There are no card shadows in
+       this system, here or anywhere else. */
+    .card {
+      background: var(--surface);
+      border: var(--line) solid var(--border);
+      border-radius: var(--radius-container);
+      padding: var(--s4);
+      margin-bottom: var(--stack);
+    }
+    .card h2 {
+      font-family: var(--font-sans);
+      font-size: var(--type-label); letter-spacing: var(--track-label); text-transform: uppercase;
+      font-weight: var(--weight-medium); color: var(--text-label);
+      margin: 0 0 var(--s3);
+    }
+
+    /* ------------------------------ lifecycle: only what applies right now -- */
+    .when-idle, .when-live, .when-sent { display: none; }
+    [data-state="idle"] .when-idle,
+    [data-state="sent"] .when-idle,
+    [data-state="sent"] .when-sent,
+    [data-state="starting"] .when-live,
+    [data-state="recording"] .when-live,
+    [data-state="capturing"] .when-live,
+    [data-state="uploading"] .when-live { display: block; }
+    [data-state="starting"] .rec-head,
+    [data-state="recording"] .rec-head,
+    [data-state="capturing"] .rec-head,
+    [data-state="uploading"] .rec-head,
+    [data-state="starting"] .counters,
+    [data-state="recording"] .counters,
+    [data-state="capturing"] .counters,
+    [data-state="uploading"] .counters { display: flex; }
+    [data-setup="true"] #settings-back { display: none; }
+
+    /* Until this browser is connected there is exactly one thing to do, so
+       exactly one thing is shown. Appearance and Recording are preferences for
+       a recorder that works; offering them beside a setup step invites a new
+       person to fiddle with the theme instead of connecting, and makes the one
+       card that matters look like the first of several. Same reason the
+       recording surface trades its title field and Start button for a way back
+       here: a disabled button with no explanation is the worst of both.
+
+       Keyed off `data-setup` and NOT `data-configured`, which is the whole
+       point of there being two attributes. They answer different questions:
+       data-configured is "is there a connection" and flips the instant pairing
+       succeeds; data-setup is "is this person still being set up" and holds
+       until the panel actually leaves the setup screen. Keying presentation off
+       the first popped the Appearance and Recording cards into view underneath
+       somebody still reading "Connected", and retitled the screen under them,
+       for the length of the hold. See setupMode in panel.js. */
+    .when-setup { display: none; }
+    [data-setup="true"] .when-setup { display: block; }
+    .surface-head h2 .when-setup { display: none; }
+    [data-setup="true"] .surface-head h2 .when-setup { display: inline; }
+    [data-setup="true"] .when-connected { display: none; }
+    [data-setup="true"] #wt-title,
+    [data-setup="true"] #wt-start { display: none; }
+
+    /* The setup readout carries a heading, not a bold line: it is the first
+       thing anybody sees and it has to read as the job, not as a status. */
+    [data-setup="true"] #connect-title {
+      font-family: var(--font-display); font-size: var(--type-h3); font-weight: var(--weight-heading);
+      line-height: 1.35; letter-spacing: var(--track-heading);
+    }
+    /* What to do, in order. Numbers are mono like every other number here. */
+    .connect-steps { list-style: none; margin: var(--s3) 0 var(--s4); padding: 0;
+                     counter-reset: cstep; }
+    .connect-steps:empty { display: none; margin: 0; }
+    .connect-steps li {
+      counter-increment: cstep; position: relative;
+      padding-left: var(--s5); margin-bottom: var(--s2);
+      font-size: 12px; line-height: 1.5; color: var(--text-soft);
+    }
+    .connect-steps li:last-child { margin-bottom: 0; }
+    .connect-steps li::before {
+      content: counter(cstep); position: absolute; left: 0; top: 0;
+      font-family: var(--font-mono); font-size: 10px; line-height: 1.75;
+      color: var(--accent);
+    }
+
+    /* --------------------------------------------------- the live readout -- */
+    .rec-head { align-items: center; gap: var(--s2); margin-bottom: var(--s1); }
+    .rec-title {
+      color: var(--text);
+      font-weight: var(--weight-semibold);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    /* A live recording is a coral dot (UI v2: squares belong to the logo
+       alone). It breathes while armed and goes quiet — handing the moment to
+       #busy-bar's sky sweep — while a capture is running. */
+    .rec-dot { width: 9px; height: 9px; flex: none; border-radius: 50%; background: var(--rec); }
+    [data-state="recording"] .rec-dot { animation: sc-breathe 1.6s var(--ease-settle) infinite; }
+    [data-busy="true"] .rec-dot { background: var(--text-off); animation: none; }
+    @keyframes sc-breathe { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+    /* Numbers are always mono: that is the product's factual register. */
+    .counters {
+      gap: var(--s4); margin-bottom: var(--s3);
+      font-family: var(--font-mono); font-size: var(--type-label);
+      font-variant-numeric: tabular-nums; color: var(--muted);
+    }
+    .counters b { color: var(--text); font-weight: var(--weight-medium); }
+
+    /* Busy affordance. The one accent while a capture is running; a 2px track,
+       which is the same progress construction the app and player use. */
+    #busy-bar { height: 3px; margin: 0 0 10px; overflow: hidden; background: transparent;
+                border-radius: var(--radius-pill); }
+    [data-busy="true"] #busy-bar { background: var(--border); }
+    [data-busy="true"] #busy-bar::after {
+      content: ""; display: block; height: 3px; width: 38%; border-radius: var(--radius-pill);
+      background: var(--accent-fill); animation: sc-sweep 1.1s var(--ease-hold) infinite;
+    }
+    @keyframes sc-sweep { from { transform: translateX(-100%); } to { transform: translateX(360%); } }
+    @media (prefers-reduced-motion: reduce) {
+      .rec-dot, #busy-bar::after { animation: none !important; }
+      [data-busy="true"] #busy-bar::after { width: 100%; }
+    }
+
+    /* ------------------------------------- captured-page thumbnails ------- */
+    /* Radius is 0 on anything sitting against a captured screen, and the
+       capture is never tinted, cropped or stylised — it is the customer's own
+       product, shown as it was. Stacked in capture order below the controls so
+       they stay put as pages accumulate. Not .when-live: that class forces
+       display:block and this column needs flex. */
+    .thumbs { display: none; flex-direction: column; gap: var(--stack); margin: var(--s3) 0 0; }
+    [data-state="starting"] .thumbs,
+    [data-state="recording"] .thumbs,
+    [data-state="capturing"] .thumbs,
+    [data-state="uploading"] .thumbs { display: flex; }
+    .thumbs:empty { display: none; }
+    .thumb img {
+      display: block; width: 100%;
+      border: var(--line) solid var(--border); border-radius: 0;   /* captured screens stay square */
+      /* A capture-time screenshot is opaque, so this only shows in the moment
+         before the blob paints. Base rather than the white it used to be: a
+         white block flashing in a dark panel reads as a broken image. */
+      background: var(--background);
+    }
+    .thumb-cap {
+      font-family: var(--font-mono); font-size: 10px; color: var(--muted);
+      margin-top: var(--s1);
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+
+    /* ---------------------------------------------------------- messages -- */
+    /* A message is a left rule and a line of prose, not a tinted box with an
+       icon. Errors name the cause and the fix; never "something went wrong". */
+    .banner-ok {
+      padding: var(--s2) var(--s3); margin: 0 0 var(--s3);
+      border: var(--line) solid color-mix(in srgb, var(--mint) 40%, transparent);
+      border-radius: var(--radius-control);
+      background: var(--tint-success); color: var(--text-soft);
+      font-size: 12px; line-height: 1.5;
+    }
+    /* Whatever Captcher has to say to this browser. It sits above the
+       surfaces rather than inside one because it is not about the screen you
+       happen to be on, and it is the only thing on this panel whose words come
+       from the server rather than from panel.js. */
+    #server-notice {
+      padding: var(--s2) var(--s3); margin: 0 0 var(--s3);
+      border: var(--line) solid color-mix(in srgb, var(--sky) 40%, transparent);
+      border-radius: var(--radius-control);
+      background: var(--tint-hint); color: var(--text-soft);
+      font-size: 12px; line-height: 1.5;
+    }
+    #server-notice[hidden] { display: none; }
+    #status, #send-status, #wt-status, #connect-status, #win-status { color: var(--muted); min-height: 1.2em; }
+    #status { margin: 0 0 var(--s3); }
+    #send-status, #wt-status, #connect-status, #win-status { margin-top: var(--s3); }
+    #status.error, #send-status.error, #wt-status.error, #connect-status.error, #win-status.error { color: var(--error); }
+    #status.ok, #send-status.ok, #wt-status.ok, #connect-status.ok, #win-status.ok { color: var(--success); }
+    #status-elapsed { font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+    .hint { color: var(--muted); font-size: 12px; line-height: 1.5; margin: 0 0 10px; }
+
+    /* The setup readout: one step at a time. The order of the old two-step
+       checklist still holds — you cannot connect to a page that is not open —
+       but only the step you are on is shown, because the other is either done
+       or not yet reachable, and a checklist where everything looks equally
+       live is not a checklist. The button underneath appears only when there
+       is something for a person to press; connecting itself needs no press. */
+    .connect-step { display: flex; flex-direction: column; gap: 2px; min-width: 0;
+                    margin: 0 0 var(--s4); }
+    .connect-note a { color: var(--link); }
+    .connect-note { color: var(--muted); font-size: 12px; line-height: 1.45; }
+    #connect-action { width: 100%; }
+    #connect-action[hidden] { display: none; }
+    /* With no button between them, the step's bottom gutter and the status
+       line's top one stack into a hole at the foot of the card. */
+    #connect-action[hidden] + #connect-status { margin-top: 0; }
+
+    /* ------------------------------------------------------------ fields -- */
+    /* Field labels are mono caps: machine labels for a slot, not prose. */
+    .field {
+      display: block; margin: 0 0 var(--s1);
+      font-family: var(--font-sans); font-size: var(--type-label); font-weight: var(--weight-medium);
+      letter-spacing: var(--track-label); text-transform: uppercase; color: var(--text-label);
+    }
+    input[type="text"] {
+      width: 100%; min-height: var(--hit);
+      margin-bottom: var(--s3);
+      padding: 7px 9px;
+      font-size: var(--type-panel); line-height: 1.4;
+      color: var(--text); background: var(--surface);
+      border: var(--line) solid var(--control-border); border-radius: var(--radius-control);
+      transition: border-color var(--dur-control) var(--ease-settle), box-shadow var(--dur-control) var(--ease-settle);
+    }
+    input[type="text"]:hover { border-color: var(--text-soft); }
+    input[type="text"]:focus {
+      border-color: var(--focus-color); outline: none; box-shadow: var(--focus-ring);
+    }
+    input::placeholder { color: var(--text-dim); }
+    label.opt {
+      display: flex; align-items: flex-start; gap: var(--s2);
+      margin-top: var(--s3); padding-top: var(--s3);
+      border-top: var(--line) solid var(--border);
+      font-size: 12px; line-height: 1.45; color: var(--text-soft);
+      cursor: pointer;
+    }
+    label.opt input { accent-color: var(--lead); margin-top: 2px; flex: none; }
+    label.opt .note { display: block; color: var(--muted); }
+    .card > h2 + label.opt { margin-top: 0; padding-top: 0; border-top: 0; }
+
+    /* A stack of real radios. Not the .presets grid: one of the three carries
+       a line of explanation, and a grid cell that has to hold a sentence stops
+       being a grid. Nothing moves on hover — the row's ground changes and that
+       is all, which is the same thing every other control here does. */
+    .choices { display: flex; flex-direction: column; }
+    .choice {
+      display: flex; align-items: flex-start; gap: var(--s2);
+      padding: 7px var(--s2); margin: 0 calc(var(--s2) * -1);
+      font-size: 12px; line-height: 1.45; color: var(--text-soft);
+      cursor: pointer;
+    }
+    .choice { border-radius: var(--radius-sm); }
+    .choice:hover { background: var(--surface-2); }
+    .choice input { accent-color: var(--lead); margin: 2px 0 0; flex: none; }
+    .choice input:checked ~ .choice-text { color: var(--text); font-weight: var(--weight-medium); }
+    .choice .note { display: block; color: var(--muted); font-weight: var(--weight-regular); }
+
+    /* ------------------------------------------------------ window size -- */
+    /* A readout first, then the ways to change it. Dimensions are machine
+       strings, so they are mono; the presets are secondary buttons in a grid
+       rather than a <select>, because the whole point is to see the list. */
+    .size-readout {
+      display: grid; grid-template-columns: auto 1fr; gap: 2px var(--s3);
+      margin: 0 0 var(--s4);
+      font-family: var(--font-mono); font-size: var(--type-label);
+      font-variant-numeric: tabular-nums; color: var(--muted);
+    }
+    .size-readout b { color: var(--text); font-weight: var(--weight-medium); }
+    .presets { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s2); margin: 0 0 var(--s4); }
+    .presets button {
+      border-color: var(--border); color: var(--text); background: transparent;
+      font-family: var(--font-mono); font-size: var(--type-label);
+      font-weight: var(--weight-regular);
+      font-variant-numeric: tabular-nums;
+      flex-direction: column; gap: 1px; padding: 6px var(--s2);
+    }
+    .presets button small { font-family: var(--font-sans); font-size: 10px; color: var(--muted); }
+    .presets button:hover:not(:disabled) { border-color: var(--border-strong); }
+    /* Selected is the lead on the border and the label, never a fill. It is a
+       colour change rather than the system's 2px "selected" border, because
+       these sit in a grid and a width change would nudge every neighbour. */
+    .presets button[aria-current="true"] { border-color: var(--link); color: var(--link); }
+    .size-row { display: flex; align-items: center; gap: var(--s2); }
+    .size-row input[type="number"] {
+      width: 0; flex: 1; min-height: var(--hit); margin: 0;
+      padding: 7px 9px; font-family: var(--font-mono); font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      color: var(--text); background: var(--surface);
+      border: var(--line) solid var(--control-border); border-radius: var(--radius-control);
+      transition: border-color var(--dur-control) var(--ease-settle), box-shadow var(--dur-control) var(--ease-settle);
+    }
+    .size-row input[type="number"]:hover { border-color: var(--text-soft); }
+    .size-row input[type="number"]:focus {
+      border-color: var(--focus-color); outline: none; box-shadow: var(--focus-ring);
+    }
+    .size-row .times { font-family: var(--font-mono); color: var(--muted); }
+    .size-row button { flex: none; border-color: var(--border-strong); }
+    .size-row button:hover:not(:disabled) { border-color: var(--link); color: var(--link); }
+
+    /* --------------------------------------------------------------- log -- */
+    .log-head { display: flex; align-items: center; gap: var(--s1); margin-bottom: var(--s2); }
+    .log-head h2 { margin: 0; flex: 1; }
+    #log {
+      margin: 0; padding: 0; list-style: none;
+      font-family: var(--font-mono); font-size: 10px; line-height: 1.7;
+      max-height: 50vh; overflow-y: auto; word-break: break-all;
+    }
+    #log li { color: var(--muted); }
+    #log li.err { color: var(--error); }
+    #log li.mark { color: var(--text); font-weight: var(--weight-medium); }
+  </style>
+</head>
+<body data-surface="boot" data-state="idle" data-configured="false" data-setup="true" data-connect="checking">
+  <header class="brand">
+    <svg class="brand-mark" viewBox="0 0 526 526" aria-hidden="true"><path fill="currentColor" d="M230 0h296v50H230zM476 0h50v270h-50zM0 256h50v270H0zM0 476h296v50H0z"/><path fill="#FF6A5C" d="M0 0h72v72H0z"/><path fill="#29B6FF" d="M92 92h90v90H92z"/><path fill="#3B49C6" d="M202 202h122v122H202z"/><path fill="#3ECFA2" d="M344 344h90v90h-90z"/><path fill="#FF6A5C" d="M454 454h72v72h-72z"/></svg>
+    <div>
+      <div class="brand-word">Captcher</div>
+      <div class="label brand-sub">Recorder</div>
+    </div>
+    <div class="brand-actions">
+      <!-- Settings opens the same menu the three dots used to: the menu holds
+           connection, window size, single-page capture, the log and reset —
+           all of them settings-shaped, and none of them worth a second icon. -->
+      <button id="menu-button" class="icon-btn" popovertarget="menu"
+              aria-haspopup="true" aria-expanded="false" aria-label="Settings" title="Settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="3.2"/>
+          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 0 1-4 0v-.09A1.7 1.7 0 0 0 8.9 19.3a1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 0 1 0-4h.09A1.7 1.7 0 0 0 4.7 8.9a1.7 1.7 0 0 0-.34-1.87l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.7 1.7 0 0 0 1.87.34H9.1a1.7 1.7 0 0 0 1.03-1.56V3a2 2 0 0 1 4 0v.09a1.7 1.7 0 0 0 1.03 1.56 1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.7 1.7 0 0 0-.34 1.87v.08a1.7 1.7 0 0 0 1.56 1.03H21a2 2 0 0 1 0 4h-.09a1.7 1.7 0 0 0-1.56 1.03z"/>
+        </svg>
+      </button>
+      <!-- Help opens the bundled guide in a tab: it is a page to read, not a
+           surface to work in, and a 320px column is the wrong shape for it. -->
+      <button id="help-button" class="icon-btn" aria-label="Help" title="Help">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="12" cy="12" r="9.2"/>
+          <path d="M9.4 9.2a2.7 2.7 0 0 1 5.25.9c0 1.8-2.65 2.7-2.65 2.7"/>
+          <line x1="12" y1="17.1" x2="12" y2="17.1"/>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- Popover API: light-dismiss, Escape, and focus-return-to-invoker come
+       free. Chrome shipped popover in 114 and chrome.sidePanel also requires
+       114, so there is no version this extension runs on that lacks it. -->
+  <div id="menu" popover role="menu" aria-labelledby="menu-button">
+    <button type="button" role="menuitem" id="mi-single">Capture a single page</button>
+    <button type="button" role="menuitem" id="mi-settings">Settings</button>
+    <button type="button" role="menuitem" id="mi-window">Window size</button>
+    <div role="separator"></div>
+    <button type="button" role="menuitemcheckbox" id="mi-log" aria-checked="false">Show log</button>
+    <button type="button" role="menuitem" id="mi-reset" class="danger">Reset panel</button>
+  </div>
+
+  <div id="busy-bar" aria-hidden="true"></div>
+  <p id="server-notice" role="status" aria-live="polite" hidden></p>
+  <div id="status" role="status" aria-live="polite"><span id="status-text"></span><span
+     id="status-elapsed" aria-hidden="true"></span></div>
+
+  <section id="surface-main" class="surface">
+    <div class="card">
+      <h2 class="when-idle">Record a walkthrough</h2>
+
+      <!-- Live readout. Deliberately separate nodes from #wt-status: that line
+           is also the error channel, and render() runs on every recorded
+           action, so sharing them made errors flash and vanish. -->
+      <div class="when-live rec-head">
+        <span class="rec-dot" aria-hidden="true"></span>
+        <span class="rec-title" id="rec-title"></span>
+      </div>
+      <div class="when-live counters">
+        <span><b id="count-pages">0</b> captured</span>
+        <span><b id="count-actions">0</b> pending</span>
+      </div>
+
+      <p class="banner-ok when-sent" id="sent-summary"></p>
+
+      <input class="when-idle" id="wt-title" type="text"
+             placeholder="Walkthrough title (defaults to page title)" spellcheck="false">
+      <p class="connect-note" id="capture-destination"></p>
+      <p class="connect-note">Records page content and actions in this flow. Submitting sends it to Captcher and its AI provider. Use test data. <a href="../privacy.html" target="_blank" rel="noopener">Privacy and capture limits</a></p>
+      <button class="when-idle" id="wt-start">Start recording</button>
+      <p class="hint">Keep this panel open until you finish submitting. Closing it stops recording and loses unsent captures.</p>
+
+      <p class="hint when-setup" id="setup-hint">This browser is not connected to your
+        Captcher account yet, so there is nowhere to send a recording.</p>
+      <button class="wide-secondary when-setup" id="go-setup">Connect this browser</button>
+
+      <div class="when-live">
+        <button id="wt-capture-step" class="wide-secondary"
+          title="Save what is on screen right now as a step — useful when a change was too small to be picked up on its own">Capture step</button>
+        <div class="row">
+          <button id="wt-finish">Finish &amp; submit</button>
+          <button id="wt-discard">Discard</button>
+        </div>
+      </div>
+
+      <div id="wt-status" role="status" aria-live="polite"></div>
+    </div>
+
+    <!-- Captured-page thumbnails, below the walkthrough card so the controls
+         stay put as pages accumulate. render() owns the contents. -->
+    <div class="thumbs" id="thumbs"></div>
+  </section>
+
+  <section id="surface-single" class="surface">
+    <div class="surface-head">
+      <button id="single-back" class="icon-btn" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+      <h2 id="single-heading" tabindex="-1">Capture a single page</h2>
+    </div>
+    <div class="card">
+      <p class="hint">A one-page snapshot rather than a recorded flow. Most walkthroughs
+        do not need this.</p>
+      <button id="capture">Capture this page</button>
+      <div class="row">
+        <button id="download" disabled>Download HTML</button>
+        <button id="send" disabled>Send to Captcher</button>
+      </div>
+      <div id="send-status" role="status" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <section id="surface-settings" class="surface">
+    <div class="surface-head">
+      <button id="settings-back" class="icon-btn" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+      <h2 id="settings-heading" tabindex="-1"><span class="when-setup">Set up the recorder</span><span
+        class="when-connected">Settings</span></h2>
+    </div>
+    <!-- A readout of the one step that matters right now, and a button only
+         when there is something for a person to press. There is deliberately
+         nothing else here: no URL field, no token field, no Continue. Whatever
+         the panel can work out for itself, it works out — and a Captcher
+         tab is connected the moment the panel sees it, with nothing pressed.
+         The button is for the other case: this tab is not Captcher, and
+         the panel can take it there. `data-connect` on <body> names the state;
+         the text is written by renderConnect() in panel.js and nowhere else. -->
+    <div class="card">
+      <h2>Connection</h2>
+      <div class="connect-step">
+        <b id="connect-title">Checking this tab…</b>
+        <span class="connect-note" id="connect-note"></span>
+      </div>
+      <ol class="connect-steps" id="connect-steps"></ol>
+      <button id="connect-reset" hidden>Reconnect or change account</button>
+      <button id="connect-action" hidden>Open Captcher</button>
+      <div id="connect-status" role="status" aria-live="polite"></div>
+    </div>
+
+    <!-- Three choices, one of them an indirection — see ../theme.js, which
+         owns the resolving. Light is the default, as in the app. -->
+    <div class="card when-connected">
+      <h2>Appearance</h2>
+      <div class="choices" role="radiogroup" aria-label="Appearance">
+        <label class="choice"><input type="radio" name="theme" value="light">
+          <span class="choice-text">Light</span></label>
+        <label class="choice"><input type="radio" name="theme" value="dark">
+          <span class="choice-text">Dark</span></label>
+        <label class="choice"><input type="radio" name="theme" value="system">
+          <span class="choice-text">System
+            <span class="note">Follows your computer's appearance setting.</span></span></label>
+      </div>
+    </div>
+
+    <!-- Auto-capture lives here rather than on the recording surface: it is
+         set once and then left alone. panel.js reads el.wtAuto live on every
+         change notification, so it still takes effect mid-recording from
+         here — the id and the generic checkbox persistence are unchanged. -->
+    <div class="card when-connected">
+      <h2>Recording</h2>
+      <label class="opt"><input type="checkbox" id="wt-auto" checked>
+        <span class="opt-text">Capture steps automatically
+          <span class="note">Takes a snapshot whenever the page changes — a
+            pop-up opens, a panel slides in, the screen updates. Turn this off
+            to capture each step yourself.</span></span></label>
+    </div>
+  </section>
+
+  <section id="surface-window" class="surface">
+    <div class="surface-head">
+      <button id="window-back" class="icon-btn" aria-label="Back"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+      <h2 id="window-heading" tabindex="-1">Window size</h2>
+    </div>
+    <!-- Two numbers matter and they differ: the window Chrome reports, and the
+         page area the capture actually photographs — the window minus tabs,
+         toolbar and this side panel. Presets and the custom fields size
+         whichever the checkbox says; the readout always shows both, so a
+         clamp by the screen is visible rather than silent. Written by
+         renderWindowSize() in panel.js and nowhere else.
+
+         The overview below it is the same pattern the single-page surface
+         uses: this is the one screen in the panel whose PURPOSE is not
+         self-evident from its controls. A person who opens "Window size"
+         reasonably expects it to change the panel, or nothing much at all;
+         what it actually does is resize their browser and thereby fix the
+         shape of every walkthrough they record next. That is worth two
+         sentences at the top rather than a discovery made after recording
+         something at the wrong size. -->
+    <div class="card">
+      <p class="hint">Sets the size of this browser window. A walkthrough is replayed at
+        the size it was recorded at, so choosing a size here before you record is what keeps
+        every screen in it consistent — and lets you record at the size the people taking it
+        will watch at. Pressing a preset or Apply resizes the window straight away.</p>
+      <p class="hint">The two numbers below differ, and both are worth seeing:
+        <b>Window</b> is the whole browser window; <b>Page area</b> is the part a capture
+        actually photographs, once the tabs, the toolbar and this panel are taken off it.</p>
+
+      <div class="size-readout">
+        <span>Window</span><b id="win-outer">—</b>
+        <span>Page area</span><b id="win-inner">—</b>
+      </div>
+      <span class="field">Presets</span>
+      <div class="presets" id="win-presets"></div>
+      <span class="field">Custom</span>
+      <div class="size-row">
+        <input type="number" id="win-width" inputmode="numeric" min="200" max="8192" step="1"
+               placeholder="Width" aria-label="Width">
+        <span class="times" aria-hidden="true">×</span>
+        <input type="number" id="win-height" inputmode="numeric" min="200" max="8192" step="1"
+               placeholder="Height" aria-label="Height">
+        <button id="win-apply">Apply</button>
+      </div>
+      <label class="opt"><input type="checkbox" id="win-fit-page" checked>
+        <span class="opt-text">Size the page area, not the window
+          <span class="note">on: a size you type is what gets photographed. Off: it is the
+            window, and the photographed area comes out smaller.</span></span></label>
+      <div id="win-status" role="status" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <div class="card hidden" id="log-card">
+    <div class="log-head">
+      <h2>Log</h2>
+      <button id="clear-log" class="mini">Clear</button>
+    </div>
+    <ul id="log" aria-live="off"></ul>
+  </div>
+
+  <script src="zip.js"></script>
+  <script src="panel.js"></script>
+</body>
+</html>

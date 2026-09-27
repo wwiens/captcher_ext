@@ -1,0 +1,22 @@
+* text=auto eol=lf
+lib/single-file.js -text
+*.png -text
+*.woff2 -text
+# Kept out of the store package. `git archive` honours these, and package.sh
+# builds from git archive, so this is the one place that decides what ships.
+#
+# README, LICENSE and THIRD-PARTY-NOTICES stay IN deliberately: the extension
+# bundles AGPL code, and shipping the notice and the reproduction recipe
+# alongside it is part of meeting that licence.
+.gitattributes  export-ignore
+.gitignore      export-ignore
+package.sh      export-ignore
+tests/**        export-ignore
+dist/           export-ignore
+
+capture-session.js text
+scripts/ export-ignore
+.github/ export-ignore
+tests/ export-ignore
+upstream/ export-ignore
+SOURCE-INSTRUCTIONS.txt export-ignore

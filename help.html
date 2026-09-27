@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Captcher Recorder — Help</title>
+  <!-- Stamps data-sc-theme on <html> synchronously, before the first paint.
+       The help page has no control of its own: it follows whatever the panel's
+       Appearance setting resolves to, and repaints live when that changes. -->
+  <script src="theme.js"></script>
+  <link rel="stylesheet" href="fonts/fonts.css">
+  <style>
+    /* ========================================================================
+       Captcher — the recorder's help page. Brand Guide v1, softened (UI v2),
+       and no purple, ever.
+
+       Same subset of the platform stylesheet the side panel carries
+       (sidepanel/panel.html), with the panel-specific sizes taken back out:
+       this is a full browser tab, so prose is the app's --type-body (15px)
+       rather than the panel's 13px, and it sits in a measured column instead
+       of a 320px strip.
+
+       Light is home (:root); [data-sc-theme="dark"] is the derived dark
+       palette. This page has no Appearance control; it reads the panel's
+       choice out of extension storage and repaints when it moves.
+
+       Everything a person reads here is written the way the panel speaks:
+       no file formats, no engine names, no internals.
+       ==================================================================== */
+    :root {
+      --indigo: #3B49C6;
+      --sky: #29B6FF; --sky-deep: #0A6FA8;
+      --mint: #3ECFA2; --coral: #FF6A5C;
+
+      --lead:       var(--indigo);
+      --lead-hover: #14151A;
+      --on-lead:    #FFFFFF;
+      --link:       var(--indigo);
+
+      --background: #FAFAF9;      /* Paper: a page, not the app ground */
+      --surface:    #FFFFFF;
+      --surface-2:  #F2F3F7;
+      --text:       #14151A;
+      --text-soft:  #4B4F5A;
+      --muted:      #6B6F7B;
+      --text-label: #6B6F7B;
+      --border:        #E6E7EC;
+      --border-strong: #C9CBD3;
+      --success: #0B7A5A;
+      --error:   #B83227;
+      --accent:  var(--sky-deep);
+
+      --font-display: "Outfit", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --font-sans: "DM Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      --weight-regular: 400;
+      --weight-medium: 500;
+      --weight-semibold: 600;
+      --weight-heading: 600;
+
+      --type-h1: 32px;
+      --type-h2: 22px;
+      --type-h3: 17px;
+      --type-body: 15px;
+      --type-small: 13px;
+      --track-heading: -.02em;
+
+      --s1: 4px;  --s2: 8px;  --s3: 12px; --s4: 16px;
+      --s5: 20px; --s6: 24px; --s7: 32px; --s8: 48px;
+      --radius-sm: 8px;
+      --radius-container: 18px;
+      --radius-pill: 999px;
+      --line: 1px;
+
+      --focus-color: var(--indigo);
+      --focus-width: 2px;
+      --focus-offset: 2px;
+      color-scheme: light;
+    }
+
+    [data-sc-theme="dark"] {
+      --lead-hover: #4F5DE0;
+      --link:       #9AA3FF;
+      --background: #0F1117;
+      --surface:    #171A22;
+      --surface-2:  #1F2330;
+      --text:       #F4F5F8;
+      --text-soft:  #B9BCC7;
+      --muted:      #9296A6;
+      --text-label: #9296A6;
+      --border:        #2A2E3A;
+      --border-strong: #3A3F4D;
+      --success: #3ECFA2;
+      --error:   #FF8A7E;
+      --accent:  var(--sky);
+      --focus-color: #7C87F5;
+      color-scheme: dark;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; background: var(--background); }
+    @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--text-soft);
+      font-family: var(--font-sans);
+      font-size: var(--type-body);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: var(--s8) var(--s6) 96px; }
+    :focus-visible { outline: var(--focus-width) solid var(--focus-color); outline-offset: var(--focus-offset); }
+    ::selection { background: var(--lead); color: var(--on-lead); }
+
+    h1, h2, h3 { color: var(--text); font-family: var(--font-display); letter-spacing: var(--track-heading); }
+    h1 { font-size: var(--type-h1); font-weight: var(--weight-heading); line-height: 1.2; margin: 0 0 var(--s3); }
+    h2 {
+      font-size: var(--type-h2); font-weight: var(--weight-heading); line-height: 1.3;
+      margin: var(--s8) 0 var(--s4); padding-top: var(--s5);
+      border-top: var(--line) solid var(--border);
+    }
+    h3 { font-size: var(--type-h3); font-weight: var(--weight-heading); margin: var(--s6) 0 var(--s2); }
+    p { margin: 0 0 var(--s4); }
+    p.lead { font-size: 17px; line-height: 1.6; color: var(--text-soft); margin-bottom: var(--s6); }
+    strong { color: var(--text); font-weight: var(--weight-semibold); }
+    a { color: var(--link); text-decoration: none; border-bottom: 1px solid transparent; }
+    a:hover { border-bottom-color: currentColor; }
+
+    .label {
+      font-family: var(--font-sans); font-size: 12px; font-weight: var(--weight-medium);
+      letter-spacing: .06em; text-transform: uppercase; color: var(--text-label);
+      margin: 0 0 var(--s2);
+    }
+    /* A control the reader will look for on screen is quoted in the product's
+       own words — mono, because it is a string lifted off the interface. */
+    .ui {
+      font-family: var(--font-mono); font-size: .88em;
+      color: var(--text); background: var(--surface-2);
+      border: var(--line) solid var(--border); padding: 1px 6px;
+      border-radius: var(--radius-sm); white-space: nowrap;
+    }
+
+    /* ----------------------------------------------------------- header -- */
+    header.brand { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s7); }
+    .brand-mark { display: block; flex: none; width: 34px; height: 34px; color: var(--text); }
+    .brand-word {
+      font-family: var(--font-display); font-weight: 900;
+      font-size: 22px; line-height: 1.05; letter-spacing: -.035em; color: var(--text);
+    }
+    .brand-sub { margin-top: 2px; }
+
+    /* ----------------------------------------------------------- lists --- */
+    ol.steps { counter-reset: step; list-style: none; margin: 0 0 var(--s5); padding: 0; }
+    ol.steps > li {
+      counter-increment: step; position: relative;
+      padding: 0 0 var(--s5) var(--s7); margin: 0;
+    }
+    /* The number is mono for the same reason every other number here is. */
+    ol.steps > li::before {
+      content: counter(step); position: absolute; left: 0; top: 1px;
+      width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center;
+      background: var(--lead); color: var(--on-lead);
+      font-family: var(--font-mono); font-size: 12px; line-height: 1;
+    }
+    ol.steps > li:last-child { padding-bottom: 0; }
+    ol.steps h3 { margin: 0 0 var(--s1); }
+    ol.steps p { margin: 0 0 var(--s2); }
+    ol.steps p:last-child { margin-bottom: 0; }
+
+    ul.plain { margin: 0 0 var(--s4); padding: 0; list-style: none; }
+    ul.plain li { position: relative; padding-left: var(--s4); margin-bottom: var(--s2); }
+    ul.plain li::before {
+      content: ""; position: absolute; left: 0; top: .62em;
+      width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong);
+    }
+
+    /* ----------------------------------------------------------- cards --- */
+    .card {
+      background: var(--surface); border: var(--line) solid var(--border);
+      border-radius: var(--radius-container);
+      padding: var(--s5); margin: 0 0 var(--s4);
+    }
+    .card :last-child { margin-bottom: 0; }
+    .card h3 { margin-top: 0; }
+    /* A message from the product, quoted so it is recognizable when it appears
+       on screen: a left rule and the words, exactly as the panel shows them. */
+    .quote {
+      background: var(--surface-2); border-radius: 12px;
+      padding: var(--s3) var(--s4);
+      margin: 0 0 var(--s4);
+    }
+    .quote b { display: block; color: var(--text); font-weight: var(--weight-semibold); }
+    .quote span { color: var(--muted); font-size: var(--type-small); }
+
+    /* ------------------------------------------------------------ table -- */
+    .fix { width: 100%; border-collapse: collapse; margin: 0 0 var(--s4); }
+    .fix th, .fix td {
+      text-align: left; vertical-align: top;
+      padding: var(--s3) var(--s4) var(--s3) 0;
+      border-bottom: var(--line) solid var(--border);
+    }
+    .fix th {
+      width: 38%;
+      font-family: var(--font-sans); font-size: var(--type-body);
+      font-weight: var(--weight-semibold); color: var(--text);
+    }
+    .fix td { color: var(--text-soft); font-size: var(--type-small); line-height: 1.6; }
+    .fix tr:last-child th, .fix tr:last-child td { border-bottom: 0; }
+
+    /* ----------------------------------------------------------- footer -- */
+    footer {
+      margin-top: var(--s8); padding-top: var(--s5);
+      border-top: var(--line) solid var(--border);
+      font-family: var(--font-sans); font-size: 12px; font-weight: var(--weight-medium);
+      letter-spacing: .06em; text-transform: uppercase; color: var(--text-label);
+      display: flex; gap: var(--s4); flex-wrap: wrap;
+    }
+
+    @media (max-width: 560px) {
+      .wrap { padding: var(--s6) var(--s4) var(--s7); }
+      h1 { font-size: 24px; }
+      .fix th, .fix td { display: block; width: auto; border-bottom: 0; padding-bottom: var(--s1); }
+      .fix td { padding-bottom: var(--s4); border-bottom: var(--line) solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="brand">
+    <svg class="brand-mark" viewBox="0 0 526 526" aria-hidden="true"><path fill="currentColor" d="M230 0h296v50H230zM476 0h50v270h-50zM0 256h50v270H0zM0 476h296v50H0z"/><path fill="#FF6A5C" d="M0 0h72v72H0z"/><path fill="#29B6FF" d="M92 92h90v90H92z"/><path fill="#3B49C6" d="M202 202h122v122H202z"/><path fill="#3ECFA2" d="M344 344h90v90h-90z"/><path fill="#FF6A5C" d="M454 454h72v72h-72z"/></svg>
+    <div>
+      <div class="brand-word">Captcher</div>
+      <div class="label brand-sub">Recorder — help</div>
+    </div>
+  </header>
+
+  <h1>Record once. Everyone practices.</h1>
+  <p class="lead">The recorder sits in a panel beside your application while you perform a
+    task the ordinary way. It keeps a picture of every screen you pass through, and when you
+    are finished it sends the run to Captcher, which turns it into a walkthrough other
+    people can click through for themselves.</p>
+
+  <div class="card">
+    <p><strong>You do not have to narrate, script or pause.</strong> Do the task as you would
+      on any other day. The recorder watches for the screen changing and saves each new screen
+      on its own.</p>
+  </div>
+
+  <h2>Before your first recording</h2>
+  <p>The recorder has to be linked to your Captcher account before it can record
+    anything — it needs somewhere to send your walkthroughs. This is a one-off, there is nothing
+    to copy or type, and the one thing it depends on is that you are <strong>signed in</strong>
+    to Captcher: the recorder gets its key from the signed-in page itself, so a signed-out
+    page cannot give it one.</p>
+  <ol class="steps">
+    <li>
+      <h3>Open the recorder panel</h3>
+      <p>Click the Captcher icon in the browser toolbar. The panel opens on the right,
+        and until this browser is connected it opens straight onto
+        <strong>Set up the recorder</strong>.</p>
+    </li>
+    <li>
+      <h3>Go to Captcher and sign in</h3>
+      <p>Press <span class="ui">Open Captcher</span> in that card — it names the address
+        it will go to — or open Captcher in the tab yourself. Sign in the way you normally
+        would.</p>
+    </li>
+    <li>
+      <h3>That is the whole of it</h3>
+      <p>The panel connects itself the moment it sees the signed-in page, with nothing pressed,
+        and the card changes to <strong>Connected</strong> with your email address. If it says
+        <strong>Sign in to finish connecting</strong> instead, the page is Captcher but
+        nobody is signed in on it — sign in and press <span class="ui">Try again</span>.</p>
+    </li>
+  </ol>
+  <p>Connected browsers are listed on your Captcher account page, so you can see what is
+    connected and remove anything you no longer use.</p>
+
+  <h2>Record a walkthrough</h2>
+  <ol class="steps">
+    <li>
+      <h3>Open the screen where the task begins</h3>
+      <p>Go to the page in your application that a learner would start from. The recorder
+        captures a real product, so whatever is on screen is what people will see.</p>
+    </li>
+    <li>
+      <h3>Name it, and press Start recording</h3>
+      <p>Give the walkthrough a title — <em>Approve a purchase order</em>, <em>Add a new
+        patient</em> — so you can find it later. Leave the box empty and the page title is used
+        instead.</p>
+    </li>
+    <li>
+      <h3>Do the task</h3>
+      <p>Click, type and navigate exactly as you normally would. Each time the screen changes
+        in a meaningful way, the recorder briefly takes over the page to save it. You will see a
+        short notice while that happens — a second or two — and then you carry on.</p>
+    </li>
+    <li>
+      <h3>Press Finish &amp; submit</h3>
+      <p>The run is sent to Captcher, where it becomes a draft walkthrough waiting for
+        you. The panel confirms it and then clears itself, ready for the next one.</p>
+    </li>
+  </ol>
+
+  <h3>What the panel is telling you while you record</h3>
+  <ul class="plain">
+    <li>A small coral dot beside the title pulses while a recording is live.</li>
+    <li><strong>Captured</strong> counts the screens saved so far.</li>
+    <li><strong>Pending</strong> counts the clicks and entries recorded since the last screen
+      was saved. It goes back to nothing each time a screen is captured.</li>
+    <li>Below the buttons, a picture of every screen captured so far, newest at the top. If a
+      screen you expected is missing, that is where you will notice.</li>
+  </ul>
+
+  <h3>What the person using your application sees</h3>
+  <p>While a screen is being saved, the page is covered briefly and clicks are ignored, so that
+    nothing moves halfway through being photographed. Three short notices appear, in order:</p>
+  <div class="card">
+    <div class="quote">
+      <b>Getting ready to capture</b>
+      <span>The page changed. Input is paused while Captcher prepares a snapshot.</span>
+    </div>
+    <div class="quote">
+      <b>Capturing this page</b>
+      <span>Captcher is saving a snapshot of this screen. Please don't click or type.</span>
+    </div>
+    <div class="quote">
+      <b>Page captured</b>
+      <span>This screen has been saved to your walkthrough.</span>
+    </div>
+    <p>If you click during that pause, the click is neither performed nor recorded. Wait for the
+      notice to clear and click again.</p>
+  </div>
+
+  <h3>Capturing a screen yourself</h3>
+  <p>Most changes are picked up on their own, but some are too quiet to notice — a form you
+    have filled in but not yet submitted, a small message in a corner, a screen you want kept
+    exactly as it is now. Press <span class="ui">Capture step</span> and the screen in front of
+    you is saved as a step.</p>
+
+  <h3>Starting over</h3>
+  <p><span class="ui">Discard</span> throws the recording away, screens and all. It asks first,
+    because those screens cannot be recovered. To keep what you have, use
+    <span class="ui">Finish &amp; submit</span> instead — a short walkthrough is still a
+    walkthrough, and you can edit it in Captcher afterwards.</p>
+
+  <h2>Settings</h2>
+  <p>Everything below lives behind the <span class="ui">Settings</span> button in the panel
+    header.</p>
+
+  <h3>Capture steps automatically</h3>
+  <p>On by default, and where it should stay for most recordings: the recorder saves a screen
+    whenever the page changes — a pop-up opens, a panel slides in, the screen updates. Turn it
+    off on a busy page that updates by itself — a live dashboard, a feed, a ticking clock — and
+    capture each step yourself with <span class="ui">Capture step</span>.</p>
+
+  <h3>Appearance</h3>
+  <p><strong>Dark</strong> and <strong>Light</strong> are what they say.
+    <strong>System</strong> follows your computer and changes with it — including on a sunrise
+    schedule, if you use one. Dark is the default. Whatever you pick applies to this help page
+    too, and to every window where the recorder is open.</p>
+
+  <h3>Window size</h3>
+  <p>A walkthrough is replayed at the shape it was recorded at, so the size of your window is
+    part of the recording. Pick one of the preset sizes — or type your own — before you start,
+    and every screen in the walkthrough will match. Two numbers are shown, and they differ:
+    <strong>Window</strong> is the whole browser window, and <strong>Page area</strong> is what
+    is actually photographed, which is the window minus the tabs, the toolbar and this panel.</p>
+
+  <h3>Capture a single page</h3>
+  <p>One screen on its own rather than a recorded run. Useful for a reference screen or a quick
+    test that everything is connected. Most walkthroughs do not need it.</p>
+
+  <h3>Show log</h3>
+  <p>A running account of what the recorder is doing, in its own words. You do not need it, but
+    if you report a problem, opening it and copying the last lines is the single most useful
+    thing you can send along.</p>
+
+  <h3>Reset panel</h3>
+  <p>Restarts the panel when it has got stuck. It drops anything you are part-way through
+    recording, so finish or discard first if what you have is worth keeping.</p>
+
+  <h2>If something is not working</h2>
+  <table class="fix">
+    <tbody>
+      <tr>
+        <th>Start recording is greyed out</th>
+        <td>The browser is not connected to Captcher yet. Open
+          <span class="ui">Settings</span> and follow the connection line at the top.</td>
+      </tr>
+      <tr>
+        <th>“The active tab can’t be recorded”</th>
+        <td>The tab is not an ordinary web page — a browser settings page, the extensions page,
+          a PDF or a new tab. Open your application in a normal tab and try again.</td>
+      </tr>
+      <tr>
+        <th>A screen you expected was not captured</th>
+        <td>The change was too small to notice, or it happened while the previous screen was
+          still being saved. Press <span class="ui">Capture step</span> to save it yourself. If
+          it keeps happening on the same page, capture that whole flow by hand.</td>
+      </tr>
+      <tr>
+        <th>Too many screens are being captured</th>
+        <td>The page is updating on its own. Turn off
+          <span class="ui">Capture steps automatically</span> in Settings and capture the steps
+          yourself.</td>
+      </tr>
+      <tr>
+        <th>The page seems frozen</th>
+        <td>A capture is in progress; the notice on the page says so. It clears on its own. If
+          it is still there after a minute, use <span class="ui">Reset panel</span> in
+          Settings — it releases the page.</td>
+      </tr>
+      <tr>
+        <th>A capture failed, or took very long</th>
+        <td>Large pages with a lot of images take longer. Try the step again. If it fails
+          repeatedly, turn on <span class="ui">Show log</span> and send us the last few lines.</td>
+      </tr>
+      <tr>
+        <th>Sending failed</th>
+        <td>Your recording is kept — nothing is lost. Check that you are still signed in to
+          Captcher, then press <span class="ui">Finish &amp; submit</span> again.</td>
+      </tr>
+      <tr>
+        <th>The panel has lost its connection</th>
+        <td>Open <span class="ui">Settings</span> with Captcher open in the tab. It
+          reconnects on its own, and tells you if it cannot.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>A few things worth knowing</h2>
+  <ul class="plain">
+    <li>Recognized password, one-time-code and card controls, plus hidden inputs, are
+      blanked during capture and restored afterwards. Screenshots are omitted when
+      these controls or embedded frames are present. Capture stops if field protection
+      cannot be verified, including inaccessible embedded frames.</li>
+    <li>Redaction does not identify every secret in ordinary text, URLs, images or
+      unmarked fields. Record with test data rather than real credentials or customer
+      records, and review the resulting draft before sharing it.</li>
+    <li>The recording follows you between tabs and pages within the flow, so a task that opens
+      a new tab still records as one walkthrough.</li>
+    <li>What arrives in Captcher is a draft. Nothing is published until you review it.</li>
+    <li>Closing the panel stops recording and loses unsent captures. Keep it open until you finish submitting.</li>
+  </ul>
+
+  <h2>About &amp; licences</h2>
+  <p>Captcher Recorder, Copyright &copy; 2026 Noventix LLC. This is free software,
+    licensed under the GNU Affero General Public License, version 3 or (at your
+    option) any later version. It comes with ABSOLUTELY NO WARRANTY, to the extent
+    permitted by law; see the licence for details.</p>
+  <p>It includes SingleFile, &copy; 2010-2025 Gildas Lormeau (GNU AGPL), with
+    bundled components under MIT and BSD licences, and the DM Sans, Outfit and
+    JetBrains Mono typefaces (SIL Open Font License 1.1). Copies of every licence
+    and notice ship inside the extension.</p>
+  <ul class="plain">
+    <li><a href="https://github.com/wwiens/captcher_ext" target="_blank" rel="noopener">Source code</a></li>
+    <li><a href="https://github.com/wwiens/captcher_ext/blob/main/LICENSE" target="_blank" rel="noopener">GNU Affero General Public License</a></li>
+    <li><a href="https://github.com/wwiens/captcher_ext/blob/main/THIRD-PARTY-NOTICES.md" target="_blank" rel="noopener">Third-party notices</a></li>
+  </ul>
+
+  <footer>
+    <span>Captcher Recorder</span>
+    <span>Beta</span>
+  </footer>
+
+</div>
+</body>
+</html>

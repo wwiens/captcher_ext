@@ -1,0 +1,43 @@
+name: Release checks
+on: [push, pull_request, workflow_dispatch]
+permissions:
+  contents: read
+jobs:
+  qualification:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-latest, windows-latest]
+        chrome: [152.0.7977.82, 153.0.8010.36]
+    runs-on: ${{ matrix.os }}
+    env:
+      SC_CHROME_VERSION: ${{ matrix.chrome }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Unit tests and archive validation
+        shell: bash
+        run: |
+          node --test tests/*.test.cjs
+          bash package.sh
+          python scripts/verify-package.py dist/captcher-recorder-1.0.0.zip
+          python -m zipfile -e dist/captcher-recorder-1.0.0.zip "$RUNNER_TEMP/extension-candidate"
+      - name: Install pinned Chrome for Testing
+        shell: bash
+        run: |
+          python scripts/install-test-chrome.py "$RUNNER_TEMP/sc-chrome" > chrome-path.txt
+          echo "CHROME_TEST_BINARY=$(cat chrome-path.txt)" >> "$GITHUB_ENV"
+          echo "SC_EXTENSION_ROOT=$RUNNER_TEMP/extension-candidate" >> "$GITHUB_ENV"
+      - name: Test packaged extension in native Chrome side panel
+        shell: bash
+        run: node tests/chrome-lifecycle-smoke.cjs --redaction --release
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: extension-${{ matrix.os }}-${{ matrix.chrome }}
+          path: dist/*.zip

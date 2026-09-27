@@ -1,0 +1,20 @@
+/* Captcher, self-hosted latin subsets, no CDN at runtime. All three faces are
+   SIL OFL 1.1 and are the same files the app serves from static/fonts/.
+
+   DM Sans        = the interface: prose, buttons, labels. One variable file
+                    (opsz 9-40, wght 100-1000), declared once with a weight range.
+   Outfit         = headlines and the wordmark. One variable file (wght 100-900);
+                    headings use 600, the wordmark 900.
+   JetBrains Mono = everything the system knows rather than says: step counts,
+                    statuses, sizes, the log, and any value lifted off a
+                    recorded screen. Monospaced, so a counter cannot jitter.
+
+   DM Sans digits are proportional, so anything numeric set in it that can
+   change on screen must also set `font-variant-numeric: tabular-nums` (.tnum). */
+@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 100 1000; font-display: swap; src: url('./dm-sans-latin.woff2') format('woff2'); }
+@font-face { font-family: 'Outfit'; font-style: normal; font-weight: 100 900; font-display: swap; src: url('./outfit-latin.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 400; font-display: swap; src: url('./jetbrains-mono-latin-400.woff2') format('woff2'); }
+@font-face { font-family: 'JetBrains Mono'; font-style: normal; font-weight: 500; font-display: swap; src: url('./jetbrains-mono-latin-500.woff2') format('woff2'); }
+
+/* Any counter, progress readout or figure that could change while on screen. */
+.tnum { font-variant-numeric: tabular-nums; }

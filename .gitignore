@@ -1,0 +1,38 @@
+# OS junk
+.DS_Store
+Thumbs.db
+# macOS SMB client leaves these when a file is deleted while open
+.smbdelete*
+
+# Editors
+.vscode/
+.idea/
+*.swp
+
+# Secrets — never commit credentials
+# (comments must be on their own line; a trailing "# ..." becomes part of the pattern)
+.env
+.env.*
+*.pem
+*.key
+
+# Build / packaging output
+node_modules/
+*.zip
+*.crx
+*.pem
+
+# Packaging output
+dist/
+
+# E2E harness output
+.e2e/
+
+# Working notes, store-submission material and review records stay local.
+# README and the third-party notices are kept: the notices ship in the
+# extension and are required by the SingleFile (AGPL) and font licences.
+*.md
+!README.md
+!THIRD-PARTY-NOTICES.md
+release/
+review/
