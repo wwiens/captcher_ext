@@ -7,9 +7,27 @@
   const REDACTED = "********";
   const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
   const SENSITIVE_AUTOCOMPLETE = /(^|\s)(current-password|new-password|one-time-code|cc-[a-z-]+)(\s|$)/i;
-  const isSensitive = (el) => !!el && /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName) &&
-    ((el.tagName === "INPUT" && /^(password|hidden)$/.test(el.type)) ||
-      SENSITIVE_AUTOCOMPLETE.test(el.getAttribute("autocomplete") || ""));
+  // A "show password" button flips type=password to type=text, after which the
+  // field looks ordinary. Remember every element ever seen as a password (here,
+  // and through notePasswords() from the recorder's type-change observer), and
+  // fall back to the field's name/id for one that was re-rendered as text.
+  const wasPassword = new WeakSet();
+  const SECRET_NAME = /(^|[^a-z])(pass(word|wd|code|phrase)?|pwd|pin|otp|cvv|cvc|csc)([^a-z]|$)/i;
+  const namedSecret = (el) => SECRET_NAME.test(
+    `${el.getAttribute("name") || ""} ${el.id || ""}`.replace(/([a-z])([A-Z])/g, "$1_$2"));
+  const isSensitive = (el) => {
+    if (!el || !/^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName)) return false;
+    if (el.tagName === "INPUT" && el.type === "password") { wasPassword.add(el); return true; }
+    return wasPassword.has(el) || (el.tagName === "INPUT" && el.type === "hidden") ||
+      SENSITIVE_AUTOCOMPLETE.test(el.getAttribute("autocomplete") || "") ||
+      (el.tagName === "INPUT" && namedSecret(el));
+  };
+  function notePasswords(root, records) {
+    if (root) for (const el of root.querySelectorAll('input[type="password" i]')) wasPassword.add(el);
+    for (const record of records || []) {
+      if (record.attributeName === "type" && /^password$/i.test(record.oldValue || "")) wasPassword.add(record.target);
+    }
+  }
   const fail = (reason = "The page changed during protection. Reload it and retry.") => {
     const error = new Error(`Sensitive-field protection could not be verified. ${reason}`);
     error.name = "SensitiveProtectionError";
@@ -49,11 +67,26 @@
     return { controls, roots, frames };
   }
   const same = (a, b) => a.length === b.length && a.every((el, i) => el === b[i]);
-  const remember = (state, value) => { if (value) state.secrets.add(String(value)); };
-  const attribute = (state, el, name, replacement = "") => {
+  // Every recognized control is blanked in the DOM. Separately, scrub() hunts
+  // for reflections of the removed values elsewhere in the serialized page, and
+  // aborts on any reflected value too short to replace safely. That hunt only
+  // makes sense for values that are actually secret: hidden inputs mostly carry
+  // "1", "true", "patch" or a record ID, and card-expiry parts are "09" or
+  // "2028" — searching for those aborted ordinary pages ("page=1") or starred
+  // out unrelated text. So hidden inputs are hunted only when token-like, and
+  // select choices and expiry parts only when long enough to replace.
+  const tokenLike = (v) => v.length >= 12 && !/\s|:\/\//.test(v) &&
+    (v.length >= 20 || (/[A-Za-z]/.test(v) && /\d/.test(v)));
+  const lowSecrecy = (el) => el.tagName === "SELECT" || /(^|\s)cc-exp/i.test(el.getAttribute("autocomplete") || "");
+  const scrubRule = (el) => el.tagName === "INPUT" && el.type === "hidden" ? tokenLike
+    : lowSecrecy(el) ? (v) => v.length >= 4 : () => true;
+  const remember = (state, value, keep = () => true) => {
+    if (value && keep(String(value))) state.secrets.add(String(value));
+  };
+  const attribute = (state, el, name, replacement = "", keep = undefined) => {
     const value = el.getAttribute(name);
     if (value === null) return;
-    remember(state, value);
+    remember(state, value, keep);
     state.undo.push(() => {
       if (el.getAttribute(name) === replacement) el.setAttribute(name, value);
     });
@@ -71,17 +104,21 @@
       state.inventory = inventory();
       for (const el of state.inventory.controls) {
         const value = el.value;
-        remember(state, value);
+        const keep = scrubRule(el);
+        remember(state, value, keep);
         if (el.tagName === "SELECT") {
           const selected = [...el.options].map(option => option.selected);
           state.liveUndo.push({ check: () => el.selectedIndex === -1,
             restore: () => [...el.options].forEach((option, i) => { option.selected = selected[i]; }) });
           for (const option of el.options) {
-            attribute(state, option, "value");
-            attribute(state, option, "label");
-            attribute(state, option, "selected");
+            // The option list is public page structure; only the choice made
+            // is the user's data, so only chosen options are hunted for.
+            const chosen = option.selected ? keep : () => false;
+            attribute(state, option, "value", "", chosen);
+            attribute(state, option, "label", "", chosen);
+            attribute(state, option, "selected", "", () => false);
             const text = option.textContent;
-            remember(state, text);
+            remember(state, text, chosen);
             state.undo.push(() => { if (option.textContent === "") option.textContent = text; });
             option.textContent = "";
             state.checks.push(() => option.textContent === "");
@@ -90,10 +127,10 @@
           state.checks.push(() => el.selectedIndex === -1);
         } else {
           // Both live properties and default/serialized values can carry data.
-          attribute(state, el, "value");
+          attribute(state, el, "value", "", keep);
           if (el.tagName === "TEXTAREA") {
             const text = el.textContent;
-            remember(state, text);
+            remember(state, text, keep);
             state.undo.push(() => { if (el.textContent === "") el.textContent = text; });
             el.textContent = "";
             state.checks.push(() => el.textContent === "");
@@ -175,7 +212,7 @@
       });
       for (const value of ordered) {
         if (!text.includes(value)) continue;
-        if (value.length < 4) fail();
+        if (value.length < 4) fail("A protected field's value is too short to remove safely because the same characters appear elsewhere on the page. Clear the field or use a longer test value, then retry.");
         const parts = text.split(value);
         hits += parts.length - 1;
         text = parts.join(REDACTED);
@@ -184,5 +221,5 @@
     }
     return { html: clean(String(html)), hits };
   }
-  self.scSensitive = { REDACTED, isSensitive, redactAll, restoreAll, verify, scrub };
+  self.scSensitive = { REDACTED, isSensitive, notePasswords, redactAll, restoreAll, verify, scrub };
 })();

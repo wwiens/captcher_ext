@@ -31,26 +31,26 @@ function port(name, sender) {
     postMessage(message) { if (this.closed) throw new Error('closed'); this.sent.push(message); },
     disconnect() { if (!this.closed) { this.closed = true; this.onDisconnect.emit(); } }};
 }
-function worker() {
-  const clock = new Clock(), onConnect = new Event(), injections = [], registrations = [];
+function worker({ manifest = { version: '1.0.0' }, fetch = async () => { throw new Error('no network in tests'); } } = {}) {
+  const clock = new Clock(), onConnect = new Event(), injections = [], registrations = [], stored = [];
   const tabs = new Map([[1,{id:1,url:'https://app.example/'}],[2,{id:2,url:'https://mail.example/'}],
     [3,{id:3,url:'https://child.example/',openerTabId:1}],[4,{id:4,url:'https://child.example/',openerTabId:3}]]);
   const chrome = {
     sidePanel:{setPanelBehavior(){}},
-    runtime:{onConnect,onMessage:new Event(),onInstalled:new Event(),onStartup:new Event(),getURL:p=>'chrome-extension://test/'+p},
-    storage:{local:{get:async()=>({})},onChanged:new Event()},
+    runtime:{onConnect,onMessage:new Event(),onInstalled:new Event(),onStartup:new Event(),getURL:p=>'chrome-extension://test/'+p,getManifest:()=>manifest},
+    storage:{local:{get:async()=>({}),set:async v=>{stored.push(v);}},onChanged:new Event()},
     tabs:{onCreated:new Event(),onRemoved:new Event(),get:async id=>{if (!tabs.has(id)) throw new Error('missing');return tabs.get(id);},sendMessage:async()=>{}},
     scripting:{unregisterContentScripts:async()=>{registrations.length=0;},
       registerContentScripts:async entries=>registrations.push(...entries),
       executeScript:async options=>{injections.push(options);return [];}}
   };
-  const context=vm.createContext({chrome,URL,Map,Set,console,setTimeout:clock.set,clearTimeout:clock.clear,Date:{now:()=>clock.now}});
+  const context=vm.createContext({chrome,URL,Map,Set,console,fetch,AbortSignal,JSON,navigator:{userAgent:'Chrome'},setTimeout:clock.set,clearTimeout:clock.clear,Date:{now:()=>clock.now}});
   vm.runInContext(source('background.js'),context);
   const connect = (p) => { onConnect.emit(p); return p; };
   const panel = () => connect(port('sc-recording-panel',{url:chrome.runtime.getURL('sidepanel/panel.html')}));
   const frame = (id, documentId='doc-'+id) => connect(port('sc-recording-frame',{tab:{id},documentId,frameId:0}));
   const start = async (p=panel(), sessionId='session-a') => {p.onMessage.emit({type:'start',tabId:1,sessionId});await flush();return p;};
-  return {clock,chrome,tabs,injections,registrations,connect,panel,frame,start};
+  return {clock,chrome,tabs,injections,registrations,stored,connect,panel,frame,start};
 }
 test('worker grants only session tabs and their descendants, targeting exact documents',async()=>{
   const w=worker();await w.start();
@@ -124,7 +124,7 @@ function recorder(sensitive = false) {
   target=new Element();
   const win={...eventTarget,innerWidth:800,innerHeight:600};win.top=win;
   const context=vm.createContext({window:win,document,Element,CSS:{escape:s=>s},Node:{DOCUMENT_POSITION_FOLLOWING:4},
-    location:{href:'https://app.example/'},self:{scSensitive:{isSensitive:()=>sensitive,REDACTED:'********'}},
+    location:{href:'https://app.example/'},self:{scSensitive:{isSensitive:()=>sensitive,notePasswords(){},REDACTED:'********'}},
     chrome:{runtime:{connect:()=>p,sendMessage:m=>{messages.push(m);return Promise.resolve({auto:false});}}},
     MutationObserver:class {constructor(fn){this.fn=fn;this.disconnected=false;observations.push(this);}observe(){}disconnect(){this.disconnected=true;}},
     setTimeout:clock.set,clearTimeout:clock.clear,Date:{now:()=>clock.now},Map,Set,WeakMap,Math});
@@ -215,4 +215,44 @@ for (const hidden of [true,false]) test('overlay veiling resolves without animat
   const s=source('sidepanel/panel.js');vm.runInContext(s.slice(s.indexOf('async function veilShield('),s.indexOf('// Pin redaction, engine execution')),context);
   const result=context.veilShield(1,true);clock.advance(1001);
   assert.equal(await result,hidden?0:-1);
+});
+
+// Pairing makes the sender's origin the destination of every later upload.
+function claim(w, sender) {
+  return new Promise(resolve => {
+    for (const fn of w.chrome.runtime.onMessage.listeners) fn({type:'pair-claim',code:'synthetic-code'}, sender, resolve);
+  });
+}
+function pairingWorker(manifest) {
+  const requests = [];
+  const fetch = async (url) => { requests.push(url);
+    return {ok:true,status:200,json:async()=>({token:'synthetic-key',email:'reviewer@example.test'})}; };
+  return {requests, w: worker({manifest, fetch})};
+}
+test('pairing is accepted only from the top frame of the Captcher app',async()=>{
+  const {w,requests}=pairingWorker({version:'1.0.0',update_url:'https://clients2.google.com/service/update2/crx'});
+  const ok=await claim(w,{tab:{id:1},frameId:0,origin:'https://app.captcher.app'});
+  assert.equal(ok.ok,true);assert.deepEqual(requests,['https://app.captcher.app/api/extension/claim']);
+  assert.equal(w.stored.at(-1).server.url,'https://app.captcher.app');
+  for (const sender of [
+    {tab:{id:1},frameId:0,origin:'https://evil.example'},
+    {tab:{id:1},frameId:0,origin:'https://docs.captcher.app'},
+    {tab:{id:1},frameId:0,origin:'http://app.captcher.app'},
+    {tab:{id:1},frameId:3,origin:'https://app.captcher.app'},
+    {frameId:0,origin:'https://app.captcher.app'},
+    {tab:{id:1},frameId:0,origin:'http://127.0.0.1:8080'},
+  ]) {
+    const refused=await claim(w,sender);
+    assert.equal(refused.ok,false,JSON.stringify(sender));
+  }
+  assert.equal(requests.length,1,'refused claims contact nothing');assert.equal(w.stored.length,1);
+});
+test('loopback pairing works only in an unpacked development build',async()=>{
+  const {w,requests}=pairingWorker({version:'1.0.0'});
+  const ok=await claim(w,{tab:{id:1},frameId:0,origin:'http://127.0.0.1:8080'});
+  assert.equal(ok.ok,true);assert.deepEqual(requests,['http://127.0.0.1:8080/api/extension/claim']);
+});
+test('a fresh worker clears a recorder registration left by one that died mid-recording',async()=>{
+  const w=worker();w.registrations.push({id:'rc-recorder'});await flush();
+  assert.equal(w.registrations.length,0);
 });

@@ -20,8 +20,9 @@ from the page and exchanges it for a per-browser key; `PAIRING.md` in the server
 repository specifies the flow.
 
 The hosted app is **https://app.captcher.app**, which is what a Web Store install
-connects to. For a local server, open `http://127.0.0.1:8080` in the tab and the
-panel will pick it up.
+connects to, and the only origin it will pair with or upload to. An unpacked
+installation (one without an `update_url`) also accepts a loopback server: open
+`http://127.0.0.1:8080` in the tab and the panel will pick it up.
 
 After changing an unpacked installation, reload it from `chrome://extensions`
 and close and reopen its side panel.
@@ -71,8 +72,13 @@ review before sending.
 
 ### Redaction
 
-The capture helper blanks password controls, password/one-time-code/card
-autocomplete controls (including selects), and all hidden inputs. It inspects
+The capture helper blanks password controls (remembering ones a show-password
+button has switched to text), password/one-time-code/card autocomplete
+controls (including selects), inputs named like passwords, PINs or card codes,
+and all hidden inputs. Reflections of the removed values elsewhere in the page
+are searched for too, except for low-secrecy values — short hidden values such
+as `1` or `true`, dropdown choices and card-expiry parts — which are blanked
+but not hunted, so that ordinary pages are not aborted or starred out. It inspects
 same-origin frames, templates, and open and closed shadow roots. Restoration
 is tied to a unique capture and document; refilled values are not overwritten.
 Missing protection, changed controls, or inaccessible/loading frames abort the

@@ -11,6 +11,18 @@ module.exports = async ({cdp,workerSession,panelSession,tab,origin}) => {
   const dashboard = await capture();
   assert.ok(!dashboard.error, 'dashboard controls and SVG: '+dashboard.error);
   assert.ok(dashboard.content.includes('<svg'), 'inline SVG survives capture');
+  // Ordinary hidden inputs ("page=1", "remember=true") are blanked but never
+  // hunted through the page: a short one used to abort every capture of the
+  // page, and a longer one starred out unrelated text. Token-like hidden
+  // values and fields named like secrets are still removed everywhere.
+  await reset();
+  await page(`document.body.insertAdjacentHTML('beforeend', '<p>Page 1 of 3</p><p>true story</p><input id=h1 type=hidden name=page value=1><input id=h2 type=hidden name=remember value=true><input id=h3 type=hidden name=csrf value=SCHiddenToken0123456789><p>SCHiddenToken0123456789</p><input id=pin name=cardPin value=SCPin4321><select autocomplete=cc-exp-month><option>01</option><option selected>09</option></select><p>Due 2026-09-01</p>');`);
+  const ordinary = await capture();
+  assert.ok(!ordinary.error, 'ordinary hidden inputs: '+ordinary.error);
+  for (const text of ['Page 1 of 3','true story','Due 2026-09-01']) assert.ok(ordinary.content.includes(text), 'HTML keeps '+text);
+  for (const secret of ['SCHiddenToken','SCPin4321']) assert.ok(!ordinary.content.includes(secret), 'HTML contains '+secret);
+  assert.deepEqual(await page(`return [...document.querySelectorAll('#h1,#h2,#h3,#pin')].map(el=>el.value);`),
+    ['1','true','SCHiddenToken0123456789','SCPin4321'],'hidden and named-secret values restored');
   await reset();
   await page(`
     document.body.insertAdjacentHTML('beforeend', '<template id=tpl><input autocomplete=one-time-code value=SCTemplateSecret123></template><input id=p type=password value="SCPass&amp;123"><input id=h type=hidden value="SCHiddenDefault123"><textarea id=t autocomplete=one-time-code>SCDefaultTextarea123</textarea><input id=c autocomplete=cc-csc value=937><select id=s autocomplete=cc-name><option value=SCOptionOne>SCFirstName</option><option value=SCOptionTwo selected>SCSecondName</option></select>');

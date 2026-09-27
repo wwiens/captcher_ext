@@ -1,5 +1,5 @@
-// Minimal ZIP writer for shipping a captured walkthrough to the Shadow
-// Capture server. Text entries (html/json) are DEFLATE-compressed via the browser's
+// Minimal ZIP writer for shipping a captured walkthrough to the Captcher
+// server. Text entries (html/json) are DEFLATE-compressed via the browser's
 // CompressionStream; already-compressed assets (png/webm) are stored as-is.
 // Entry names are written with the UTF-8 flag (0x800) set, which the server
 // relies on to decode names like "01 — Step" correctly.

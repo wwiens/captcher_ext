@@ -30,7 +30,10 @@
   // Everything a user generates. `scroll` is deliberately absent:
   // loadDeferredImages scrolls the page itself, and programmatic scrolling
   // does not go through wheel/touch.
+  // Pointer events too: dialog libraries (Radix, shadcn, Headless UI) dismiss
+  // on pointerdown outside, which would close a dialog mid-capture.
   const TYPES = [
+    "pointerdown", "pointerup", "pointercancel",
     "mousedown", "mouseup", "click", "dblclick", "auxclick", "contextmenu",
     "keydown", "keypress", "keyup", "wheel", "touchstart", "touchend",
     "touchmove", "submit", "dragstart", "paste", "cut"

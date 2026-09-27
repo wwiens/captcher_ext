@@ -25,8 +25,9 @@ jobs:
         run: |
           node --test tests/*.test.cjs
           bash package.sh
-          python scripts/verify-package.py dist/captcher-recorder-1.0.0.zip
-          python -m zipfile -e dist/captcher-recorder-1.0.0.zip "$RUNNER_TEMP/extension-candidate"
+          version=$(python -c 'import json;print(json.load(open("manifest.json"))["version"])')
+          python scripts/verify-package.py "dist/captcher-recorder-$version.zip"
+          python -m zipfile -e "dist/captcher-recorder-$version.zip" "$RUNNER_TEMP/extension-candidate"
       - name: Install pinned Chrome for Testing
         shell: bash
         run: |

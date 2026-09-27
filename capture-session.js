@@ -10,7 +10,10 @@
     // Same-origin frames may have speculative holds from the recorder.
     const releaseFrames = root => {
       for (const el of root.querySelectorAll("*")) {
-        const shadow = chrome.dom?.openOrClosedShadowRoot(el);
+        // Chrome's API throws for SVG/MathML elements (see sensitive.js); an
+        // unguarded icon would end the walk and strand every later frame hold.
+        const shadow = el.namespaceURI === "http://www.w3.org/1999/xhtml"
+          ? chrome.dom?.openOrClosedShadowRoot(el) : el.shadowRoot;
         if (shadow) releaseFrames(shadow);
         if (/^(IFRAME|FRAME)$/.test(el.tagName)) {
           try { el.contentWindow.__labShield?.release(); if (el.contentDocument) releaseFrames(el.contentDocument); } catch { /* inaccessible frame */ }

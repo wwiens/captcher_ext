@@ -88,6 +88,10 @@ const deadline=setTimeout(()=>{console.error('Chrome smoke test exceeded 120 sec
  assert.equal((await pageState(other.id))[0].result.secretModule,false);
  await cdp.eval(workerSession,`chrome.scripting.executeScript({target:{tabId:${tab.id}},func:()=>{const input=document.querySelector('#field');input.value='safe test';input.dispatchEvent(new Event('change',{bubbles:true}));}})`);
  await sleep(100);assert.ok(await cdp.eval(panelSession,'walkthrough.pendingActions.some(a=>a.value==="safe test")'));
+ // A password revealed by a show-password button is type=text, but stays a secret.
+ const revealed=(await cdp.eval(workerSession,`chrome.scripting.executeScript({target:{tabId:${tab.id}},func:async()=>{document.body.insertAdjacentHTML('beforeend','<input id=pw type=password>');const p=document.querySelector('#pw');await new Promise(r=>setTimeout(r,50));p.type='text';await new Promise(r=>setTimeout(r,50));p.value='SCRevealed123';p.dispatchEvent(new Event('change',{bubbles:true}));p.click();return self.scSensitive.isSensitive(p);}})`))[0].result;
+ await sleep(100);assert.equal(revealed,true,'revealed password is still sensitive');
+ assert.ok(!(await cdp.eval(panelSession,'JSON.stringify(walkthrough.pendingActions)')).includes('SCRevealed'),'revealed password never reaches recorded actions');
  const switched=await cdp.eval(panelSession,`(async()=>{const original=veilShield;try{veilShield=async(id,hidden)=>{const n=await original(id,hidden);if(hidden)await chrome.tabs.update(${other.id},{active:true});return n;};return await takeViewportScreenshot(await chrome.tabs.get(${tab.id}))===null;}finally{veilShield=original;await chrome.tabs.update(${tab.id},{active:true});}})()`);
  assert.equal(switched,true,'real tab switch discards screenshot');
  await cdp.eval(panelSession,'discardWalkthrough(true)');await sleep(200);

@@ -110,7 +110,12 @@
   // `el.value` when an input has no aria-label or title, so merely *clicking*
   // a password box recorded its contents as the step's label.
   // -------------------------------------------------------------------------
-  const { isSensitive, REDACTED } = self.scSensitive;
+  const { isSensitive, notePasswords, REDACTED } = self.scSensitive;
+  // A revealed password (type flipped to text) must stay a secret.
+  notePasswords(document);
+  observeMutations((records) => notePasswords(null, records)).observe(document.documentElement, {
+    subtree: true, attributes: true, attributeOldValue: true, attributeFilter: ["type"]
+  });
 
   const labelOf = (el) => isSensitive(el) ? REDACTED : clean(
     el.getAttribute("aria-label") || el.innerText ||

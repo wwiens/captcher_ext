@@ -2,7 +2,8 @@
 // Page resources stay subject to browser access rules; no privileged proxy.
 
 chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
-chrome.storage.local.setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" });
+// Keeps the device token out of reach of content scripts (privacy.html relies on this).
+chrome.storage.local.setAccessLevel?.({ accessLevel: "TRUSTED_CONTEXTS" })?.catch(() => {});
 
 // SingleFile's lazy-image loader (loadDeferredImages) schedules its idle/max
 // timers through the extension background — page timers are throttled during
@@ -17,10 +18,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "pair-claim") {
     // Redeeming a pairing code for this browser's capture token. The origin is
     // taken from `sender`, never from the message: Chrome sets it and a page
-    // cannot spoof it, so a compromised page can pair this extension to its own
-    // account but cannot silently repoint it at an attacker's server — which is
-    // the difference between a revocable device row and an exfiltration
-    // channel for every future capture.
+    // cannot spoof it. claimPairing() accepts only the Captcher app's exact
+    // origin, so no other page can repoint uploads at its own server — the
+    // difference between a revocable device row and an exfiltration channel
+    // for every future capture.
     claimPairing(message.code, sender)
       .then(sendResponse)
       .catch(error => sendResponse({ ok: false, error: error.message || String(error) }));
@@ -89,10 +90,19 @@ function deviceLabel() {
   return `${base} · recorder ${version}`;
 }
 
-function isSecureServer(raw) {
-  try { const u = new URL(raw); return !u.username && !u.password &&
-    (u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname))); }
-  catch { return false; }
+// The only origins this extension pairs with. A successful claim makes the
+// sender's origin the destination of every later upload, so "any HTTPS page"
+// is far too wide. Mirrors mayBeCaptcher() in the panel. Loopback is for
+// development and is honoured only in unpacked installs, which have no
+// update_url; a store install never pairs with or uploads to a local port.
+const CAPTCHER_ORIGINS = ["https://app.captcher.app"];
+const DEV_BUILD = !chrome.runtime.getManifest().update_url;
+const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+function isCaptcherOrigin(origin) {
+  let u;
+  try { u = new URL(origin); } catch { return false; }
+  if (CAPTCHER_ORIGINS.includes(u.origin)) return true;
+  return DEV_BUILD && /^https?:$/.test(u.protocol) && LOOPBACK_HOSTS.includes(u.hostname);
 }
 async function claimPairing(code, sender) {
   if (typeof code !== "string" || !code) {
@@ -107,8 +117,10 @@ async function claimPairing(code, sender) {
       origin = new URL(sender.url).origin;
     } catch { /* falls through to the error below */ }
   }
-  if (!origin || !isSecureServer(origin)) {
-    return { ok: false, error: "Connect over HTTPS (HTTP is allowed only for loopback development)." };
+  // Only the top frame of a tab on a Captcher origin may pair: connect.js is
+  // injected there and nowhere else, and recorder frames never send this.
+  if (!sender?.tab || sender.frameId !== 0 || !origin || !isCaptcherOrigin(origin)) {
+    return { ok: false, error: "Pairing is only accepted from the Captcher app." };
   }
 
   let response;
@@ -148,7 +160,6 @@ async function claimPairing(code, sender) {
   } catch (error) {
     return { ok: false, error: `Could not save the connection (${error.message || error}).` };
   }
-  console.info(`[pair] connected to ${origin} as ${data.email || "?"}`);
   return { ok: true, email: data.email, url: origin };
 }
 
@@ -160,15 +171,15 @@ async function claimPairing(code, sender) {
 // Captcher page; the app checks for it. See announce.js for why the
 // extension has to be the one to speak.
 //
-// Registered dynamically rather than declared in the manifest because the
-// server address is user-configured — there is no origin known at build time.
-// A static content script would have to match <all_urls> and inject into every
-// page anyone visits just to set a flag on one of them.
+// Registered dynamically, for the paired server's origin only, rather than
+// declared in the manifest: a development build can pair with a local server,
+// and a static content script would otherwise need a broader match than the
+// one page it sets a flag on.
 // ---------------------------------------------------------------------------
 const ANNOUNCE_SCRIPT_ID = "captcher-announce";
 
-// storage holds whatever was typed into the settings field, which may be a
-// bare host, carry a path, or not parse at all. Only the origin is wanted.
+// Only the origin of the stored server address is wanted. Tolerate a value
+// that does not parse rather than throwing in the worker.
 function announceMatchesFor(serverUrl) {
   const raw = (serverUrl || "").trim();
   if (!raw) return [];
@@ -200,16 +211,14 @@ async function syncAnnounceScript() {
       runAt: "document_start",
       persistAcrossSessions: true
     }]);
-  } catch (error) {
-    // A half-typed address yields a pattern Chrome rejects. Not worth
-    // surfacing — the next keystroke runs this again.
-    console.debug("announce: registration skipped —", error.message);
+  } catch {
+    // A pattern Chrome rejects; the next change to the address retries.
   }
 }
 
-// The settings field saves on every `input`, so this fires per keystroke.
-// Re-registering that often is pointless churn; settle first. A worker killed
-// inside the window loses the pending sync, which onStartup then repairs.
+// Pairing, disconnect and re-pairing can change the stored address in quick
+// succession; settle first. A worker killed inside the window loses the
+// pending sync, which onStartup then repairs.
 const ANNOUNCE_SYNC_DELAY_MS = 400;
 let announceSyncTimer = null;
 
@@ -229,14 +238,6 @@ chrome.storage.onChanged.addListener((changes, area) => {
   if (before !== after) scheduleAnnounceSync();
 });
 
-// What the resource proxy will open. Page subresources are http(s), and the
-// engine passes through the occasional data: URL, which is self-contained —
-// no network, no filesystem. Everything else (file:, chrome:,
-// chrome-extension:, blob:) is either privileged or unresolvable from a
-// service worker, so refusing them costs a real capture nothing.
-//
-// An unparseable URL is refused for the same reason: with no base to resolve
-// against, fetch() here would either throw or reach the extension's own origin.
 // Recording authorization lives outside the panel. A content script is only an
 // inert connection request until this broker grants its tab/document a session.
 // Losing the panel, worker or lease stops every already-injected recorder.
@@ -251,6 +252,10 @@ chrome.storage.onChanged.addListener((changes, area) => {
     registrationWork = registrationWork.catch(() => {}).then(work);
     return registrationWork;
   };
+  // A fresh worker has no session. A registration left by a worker that died
+  // mid-recording would otherwise inject an (inert, rejected) recorder into
+  // every page load until the browser restarts.
+  registerInOrder(() => chrome.scripting.unregisterContentScripts({ ids: [SCRIPT_ID] })).catch(() => {});
   const post = (port, message) => {
     try { port.postMessage(message); } catch { /* receiver closed */ }
   };

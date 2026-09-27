@@ -73,3 +73,17 @@ test('malformed success does not discard the draft; uploads omit cookies and red
  const u=upload(200,{});await assert.rejects(u.run(),/no draft identifier/);
  assert.equal(u.calls[0].options.credentials,'omit');assert.equal(u.calls[0].options.redirect,'error');
 });
+test('frame holds are released past SVG icons, which Chrome refuses to inspect for shadow roots',()=>{
+ const connect=new Event();let frameReleases=0;
+ const svg={namespaceURI:'http://www.w3.org/2000/svg',tagName:'svg',shadowRoot:null};
+ const frame={namespaceURI:'http://www.w3.org/1999/xhtml',tagName:'IFRAME',contentWindow:{__labShield:{release(){frameReleases++;}}},contentDocument:null};
+ const context=vm.createContext({self:{scSensitive:{restoreAll(){}}},window:{__labShield:{release(){}}},
+  document:{querySelectorAll:()=>[svg,frame]},
+  chrome:{runtime:{onConnect:connect,getURL:p=>'chrome-extension://test/'+p},
+   dom:{openOrClosedShadowRoot(el){if(el.namespaceURI!=='http://www.w3.org/1999/xhtml')throw new TypeError('not an HTMLElement');return null;}}},
+  AbortController,Date,setTimeout:()=>1,clearTimeout(){}});
+ vm.runInContext(read('capture-session.js'),context);
+ const p={name:'sc-capture-owner',sender:{url:'chrome-extension://test/sidepanel/panel.html'},onMessage:new Event(),onDisconnect:new Event(),sent:[],postMessage(m){this.sent.push(m);},disconnect(){this.onDisconnect.emit();}};
+ connect.emit(p);p.onMessage.emit({type:'start',id:'owner'});p.disconnect();
+ assert.equal(frameReleases,1);
+});

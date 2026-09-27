@@ -146,7 +146,7 @@ mi.window.addEventListener("click", () => {
 // and the help tab cannot disagree about what "system" resolved to.
 // ---------------------------------------------------------------------------
 function renderAppearance(detail) {
-  const choice = detail ? detail.choice : (window.scTheme ? window.scTheme.get() : "dark");
+  const choice = detail ? detail.choice : (window.scTheme ? window.scTheme.get() : "light");
   for (const radio of el.themeRadios) radio.checked = radio.value === choice;
 }
 
@@ -542,7 +542,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const mine = !!(walkthrough && walkthrough.initial &&
                     sender.tab && sender.tab.id === walkthrough.tabId);
     const auto = mine && el.wtAuto.checked;
-    const capturing = auto && !captureBusy && !walkthrough.uploading &&
+    // A failed capture blocks new automatic ones until it is retried
+    // (queueStepCapture declines them), so the page must be given back now
+    // rather than frozen until shield.js's deadline for a capture that never runs.
+    const blocked = !!(walkthrough && walkthrough.failedCapture);
+    const capturing = auto && !blocked && !captureBusy && !walkthrough.uploading &&
                       Date.now() >= (walkthrough.autoCooldownUntil || 0);
     // Every detector firing is logged with its evidence and the decision it
     // got — this is the audit trail for "why does the overlay keep coming
@@ -560,6 +564,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       let decision;
       if (!mine) decision = "ignored — not the recorded tab";
       else if (!el.wtAuto.checked) decision = "ignored — auto-capture is off";
+      else if (blocked) decision = "ignored — a failed capture is waiting for retry";
       else if (capturing) decision = "auto-capture queued";
       else if (walkthrough.uploading) decision = "ignored — uploading";
       else if (walkthrough.deferredAuto) decision = "suppressed — a settled re-check is already pending";
@@ -579,7 +584,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                     : "page content updated";
       queueStepCapture(`auto — ${trigger}` +
                        (d.samples && d.samples.length ? `: ${d.samples[0]}` : ""));
-    } else if (auto && !walkthrough.uploading && !walkthrough.deferredAuto) {
+    } else if (auto && !blocked && !walkthrough.uploading && !walkthrough.deferredAuto) {
       // A burst suppressed by the cooldown (or a capture in flight) is often
       // the second half of the same change — Lightning opens its record modal
       // as a skeleton and renders the form fields a moment later, so the
@@ -966,7 +971,6 @@ async function performCapture(tab) {
   t0 = Date.now();
   setStatus("Capturing…");
   startHeartbeatMonitor();
-  setStatus("Capturing…");
   elapsedTicker = setInterval(() =>
     setStatusElapsed(` ${Math.round((Date.now() - t0) / 1000)}s`), 1000);
 
@@ -1022,8 +1026,9 @@ async function performCapture(tab) {
       ]);
     } finally {
       clearTimeout(watchdog);
-      // Restore this transaction. A watchdog does not cancel SingleFile; the
-      // shared engine cancellation/quarantine work remains a release blocker.
+      // Restore this transaction. The watchdog does not stop SingleFile itself:
+      // capture-session.js aborts its network work and quarantines the engine
+      // until it settles, so a late result cannot be committed.
       await restoreSecrets(tab.id, secretGuard);
     }
 
@@ -1444,19 +1449,20 @@ const NOT_OURS = { ours: false, pairing: 0, minExtensionVersion: null,
 // this extension is installed. A fingerprint handed to strangers, for a
 // question none of them could answer.
 //
-// There is one hosted Captcher now, so the set is knowable: the address
-// this build ships with, the one it last paired against, anything on the
-// product's own domain (which covers staging), and a local server for
-// development. Nothing outside that is contacted, ever.
+// There is one hosted Captcher now, so the set is knowable: exactly the
+// address this build ships with, plus a local server for development in an
+// unpacked install. Pairing makes the page's origin the destination of every
+// later upload, so this is an exact list rather than "anything on the domain".
+// Nothing outside it is contacted, ever. background.js enforces the same set.
+const CAPTCHER_ORIGINS = [DEFAULT_SERVER_URL];
+// Store installs carry update_url; unpacked development builds do not.
+const DEV_BUILD = !chrome.runtime.getManifest().update_url;
+const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
 function mayBeCaptcher(origin) {
-  let host;
-  try { host = new URL(origin).hostname; } catch { return false; }
-  if (host === "localhost" || host === "127.0.0.1" || host === "[::1]") return true;
-  if (host === "captcher.app" || host.endsWith(".captcher.app")) return true;
-  for (const known of [knownServerUrl, DEFAULT_SERVER_URL]) {
-    try { if (known && new URL(known).origin === origin) return true; } catch { /* not a URL */ }
-  }
-  return false;
+  let u;
+  try { u = new URL(origin); } catch { return false; }
+  if (CAPTCHER_ORIGINS.includes(u.origin)) return true;
+  return DEV_BUILD && /^https?:$/.test(u.protocol) && LOOPBACK_HOSTS.includes(u.hostname);
 }
 
 /** Ask an origin whether it is a Captcher server, and what it speaks.
@@ -1669,11 +1675,12 @@ async function connectNow() {
     () => finishConnect({ ok: false, error: "Captcher did not answer in time." }),
     CONNECT_TIMEOUT_MS);
   try {
-    // Covered by the `<all_urls>` host permission the capture engine already
-    // holds, so this injection costs nothing extra. It used to say `activeTab`
-    // covered it, which was true but redundant — that permission has been
-    // dropped from the manifest precisely because nothing needed it.
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["connect.js"] });
+    // Pin the injection to the document whose origin was just checked. The tab
+    // can navigate between the probe and the injection; a documentId target
+    // then fails instead of running connect.js on whatever page is there now.
+    const [top] = await chrome.scripting.executeScript({ target: { tabId: tab.id }, func: () => location.origin });
+    if (!top?.documentId || !mayBeCaptcher(top.result)) throw new Error("this tab is not a Captcher page");
+    await chrome.scripting.executeScript({ target: { tabId: tab.id, documentIds: [top.documentId] }, files: ["connect.js"] });
   } catch (error) {
     // Injection refused: a chrome:// page, the Web Store, a PDF viewer, or a
     // tab that navigated out from under us.
@@ -1777,7 +1784,7 @@ function uploadTimeoutFor(bytes) {
 // server's response JSON ({ walkthrough_id, steps, player_url, … }).
 function isSecureServer(raw) {
   try { const u = new URL(raw); return !u.username && !u.password &&
-    (u.protocol === "https:" || (u.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname))); }
+    (u.protocol === "https:" || (DEV_BUILD && u.protocol === "http:" && LOOPBACK_HOSTS.includes(u.hostname))); }
   catch { return false; }
 }
 async function disconnectServer(expectedToken) {
@@ -2596,10 +2603,6 @@ async function captureWalkthroughStep(reason, tabId, settle, alwaysKeep) {
     if (!liveSig) {
       log("pre-check: live probe failed — serializing to compare");
     } else if (prevEntry.liveSignature) {
-      const a = prevEntry.liveSignature, b = liveSig;
-      let i = 0;
-      while (i < a.length && i < b.length && a[i] === b[i]) i++;
-      const clip = (s) => s.slice(Math.max(0, i - 20), i + 40);
       log("pre-check: page content changed — serializing to compare");
     }
   }
@@ -2658,6 +2661,21 @@ async function captureWalkthroughStep(reason, tabId, settle, alwaysKeep) {
   }
 }
 
+// Trailing actions whose tab was closed before Finish have no page left to
+// capture. They land on a repeat of the last kept page — exactly what an
+// unchanged final capture would have produced — instead of blocking Finish.
+function finishOnLastPage(wt, why) {
+  const last = wt.steps.length ? wt.steps[wt.steps.length - 1] : wt.initial;
+  if (!last) return;
+  const folder = `step-${String(wt.steps.length + 1).padStart(3, "0")}`;
+  wt.steps.push({ folder, content: last.content, title: last.title, actions: wt.pendingActions.slice(),
+                  signature: last.signature, liveSignature: last.liveSignature,
+                  screenshot: last.screenshot, viewport: last.viewport });
+  wt.pendingActions = [];
+  wt.failedCapture = null;
+  log(`walkthrough: ${folder} saved from the last captured page — ${why}`, "mark");
+}
+
 el.wtFinish.addEventListener("click", async () => {
   if (!walkthrough || walkthrough.uploading) return;   // re-entrancy guard
   // Lives on the walkthrough, not as a module variable, so it cannot outlive
@@ -2671,16 +2689,25 @@ el.wtFinish.addEventListener("click", async () => {
     await unregisterRecorder(); // freeze the event stream before draining the queue
     await wt.busy; // let an in-flight navigation capture land
     if (walkthrough !== wt) return;
+    // A closed tab cannot be captured. Retrying it would fail on every Finish
+    // and leave Discard as the only way out, losing every captured page.
+    const tabGone = async (id) => id == null || !(await chrome.tabs.get(id).catch(() => null));
     if (wt.failedCapture) {
       const failed = wt.failedCapture;
-      await captureWalkthroughStep(failed.reason, failed.tabId, failed.settle, true);
+      if (await tabGone(failed.tabId)) {
+        log("walkthrough: the tab of the failed capture was closed — its actions go with the final step", "mark");
+        wt.failedCapture = null;
+      } else {
+        await captureWalkthroughStep(failed.reason, failed.tabId, failed.settle, true);
+      }
     }
     if (wt.pendingActions.length) {
       // Trailing actions that never triggered a navigation need a page to
       // attach to — capture the current state as the last step.
       // alwaysKeep: even an identical page must land, or the trailing actions
       // would have nothing to attach to
-      await captureWalkthroughStep("final state, trailing actions", null, false, true);
+      if (await tabGone(wt.tabId)) finishOnLastPage(wt, "the recorded tab was closed");
+      else await captureWalkthroughStep("final state, trailing actions", null, false, true);
     }
     if (!walkthrough.initial) throw new Error("the initial page was never captured.");
     // The per-step page `title` and the actions' url/docTitle/selector/
